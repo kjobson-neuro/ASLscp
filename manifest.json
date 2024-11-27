@@ -4,7 +4,7 @@
   "cite": "",
   "name": "aslgear",
   "source": "",
-  "url": "",
+  "url": "https://github.com/kjobson-neuro/aslgear",
   "label": "ASL Processing Beta",
   "description": "Gear for single PLD ASL processing",
   "command": "/flywheel/v0/pipeline_singlePLD.sh",
