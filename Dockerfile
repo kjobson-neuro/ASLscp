@@ -175,7 +175,7 @@ RUN pipx install numpy \
 COPY ./input/* ${FLYWHEEL}/input/
 COPY ./workflows/ ${FLYWHEEL}/workflows/
 COPY ./pipeline_singlePLD.sh ${FLYWHEEL}/
-COPY ./output/* ${FLYWHEEL}/
+RUN mkdir ${FLYWHEEL}/output/stats
 RUN chmod -R 777 ${FLYWHEEL}
 
 # Configure entrypoints-
