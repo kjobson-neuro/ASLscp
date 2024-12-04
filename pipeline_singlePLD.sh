@@ -8,9 +8,25 @@
 # Set up data paths
 
 data_dir='/flywheel/v0/input'
+dicom_dir='/flywheel/v0/input/dicoms'
 out_dir='/flywheel/v0/output'
 std='/flywheel/v0/input/std'
+
+if [ ! -d /flywheel/v0/output/stats ]; then
+  mkdir /flywheel/v0/output/stats
+fi
+
 stats='/flywheel/v0/output/stats'
+
+# Check if the data is a zip file
+# Unzip if so
+
+zip_files=($(find "$data_dir" -type f -name "*.zip"))
+
+for file in "${zip_files[@]}"
+do
+   unzip "$file" -d "$dicom_dir"/
+done
 
 # Convert dicom to nifti files
 # Doing the loop so we can read in all data at once
@@ -81,7 +97,7 @@ mcflirt -in ${out_dir}/all_data.nii.gz -out ${out_dir}/mc.nii.gz
 # Split the data back up after motion correction
 fslroi ${out_dir}/mc.nii.gz ${out_dir}/m0_mc.nii.gz 0 1
 fslroi ${out_dir}/mc.nii.gz ${out_dir}/m0_ir_mc.nii.gz 0 2
-fslroi ${out_dir}/mc.nii.gz ${out_dir}/asl_mc.nii.gz 2 10
+fslroi ${out_dir}/mc.nii.gz ${out_dir}/asl_mc.nii.gz 2 -1
 
 # Skull-Stripping
 mri_synthstrip -i ${out_dir}/m0_mc.nii.gz -m ${out_dir}/mask.nii.gz
@@ -104,7 +120,7 @@ echo "ANTs Registration finished"
 # Standardize CBF images to a common template
 ${ANTSPATH}/WarpImageMultiTransform 3 ${std}/batsasl/bats_cbf.nii.gz ${out_dir}/w_batscbf.nii.gz -R ${out_dir}/sub_av.nii.gz --use-BSpline -i ${out_dir}/ind2temp0GenericAffine.mat ${out_dir}/ind2temp1InverseWarp.nii.gz
 list=("arterial" "cortical" "subcortical" "thalamus") ##list of ROIs
-echo ${list}
+
 # deforming ROI
 
 for str in "${list[@]}" 
