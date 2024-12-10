@@ -172,7 +172,7 @@ RUN pipx install numpy \
     && pipx install flywheel-sdk --include-deps
 
 # Copy stuff over & change permissions
-COPY ./input/* ${FLYWHEEL}/input/
+COPY ./input/ ${FLYWHEEL}/input/
 COPY ./workflows/ ${FLYWHEEL}/workflows/
 COPY ./pipeline_singlePLD.sh ${FLYWHEEL}/
 RUN chmod -R 777 ${FLYWHEEL}

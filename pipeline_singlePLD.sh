@@ -1,8 +1,11 @@
 #!/bin/bash
 
-#### NOTES FOR KATIE 102224
-# change dcm2niix to include series description (-f %d)
-# then do fslmerge of all data, followed by mcflirt, followed by fslroi to extract just the 1st volume (m0), first and second in the same array (M0+IR# ), and from 3rd volume to the end 
+## script created by Manuel Tsao
+## script edited and uploaded to FW by krj
+
+##
+### Minimal ASL Pre-processing and CBF Calculation
+##
 
 ### Data Preprocessing
 # Set up data paths
@@ -46,8 +49,8 @@ while (( attempt <= max_attempts )); do
     echo "Attempt $attempt of $max_attempts..."
 
     # Use find to locate the files
-    asl_file=$(find "$out_dir" -maxdepth 1 -type f -name "*ASL.nii" | head -n 1)
-    m0_file=$(find "$out_dir" -maxdepth 1 -type f -name "*M0.nii" | head -n 1)
+    asl_file=$(find "$out_dir" -maxdepth 1 -type f -name "*ASL.nii")
+    m0_file=$(find "$out_dir" -maxdepth 1 -type f -name "*M0.nii")
 
     # Debugging output
     echo "ASL file: $asl_file"
@@ -86,7 +89,6 @@ ld=$(iconv -f UTF-8 -t UTF-8//IGNORE <<< "$dcm_content" | awk -F 'sWipMemBlock.a
 pld=$(iconv -f UTF-8 -t UTF-8//IGNORE <<< "$dcm_content" | awk -F 'sWipMemBlock.alFree\\[1\\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 nbs=$(iconv -f UTF-8 -t UTF-8//IGNORE <<< "$dcm_content" | awk -F 'sWipMemBlock.alFree\\[11\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 m0_scale=$(iconv -f UTF-8 -t UTF-8//IGNORE <<< "$dcm_content" | awk -F 'sWipMemBlock.alFree\\[20\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
-
 
 # Merge Data
 fslmerge -t ${out_dir}/all_data.nii.gz $m0_file $asl_file
