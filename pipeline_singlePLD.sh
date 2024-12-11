@@ -14,6 +14,7 @@ data_dir='/flywheel/v0/input'
 dicom_dir='/flywheel/v0/input/dicoms'
 out_dir='/flywheel/v0/output'
 std='/flywheel/v0/input/std'
+mkdir ${out_dir}/.data
 
 if [ ! -d /flywheel/v0/output/stats ]; then
   mkdir /flywheel/v0/output/stats
@@ -78,17 +79,17 @@ done
 
 # Find out data paths for m0 and asl files
 m0_file=$(find ${out_dir} -maxdepth 1 -type f -name "*M0*.nii" -print | tail -n 1)
-asl_file=$(find ${out_dir} 1 -type f -name "*ASL*.nii" -print | head -n 1)
+asl_file=$(find ${out_dir} 1 -type f -name "*ASL*.nii" -print | tail -n 1)
 
 # Extract dicom header info to get parameters for cbf calculation
-dcm_file=$(find ${data_dir}/dicoms -maxdepth 2 -type f|head -n 1)
+dcm_file=$(find ${data_dir}/dicoms -maxdepth 2 -type f | head -n 1)
 
 dcm_content=$(<$dcm_file)
 
-ld=$(iconv -f UTF-8 -t UTF-8//IGNORE <<< "$dcm_content" | awk -F 'sWipMemBlock.alFree\\[0\\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
-pld=$(iconv -f UTF-8 -t UTF-8//IGNORE <<< "$dcm_content" | awk -F 'sWipMemBlock.alFree\\[1\\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
-nbs=$(iconv -f UTF-8 -t UTF-8//IGNORE <<< "$dcm_content" | awk -F 'sWipMemBlock.alFree\\[11\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
-m0_scale=$(iconv -f UTF-8 -t UTF-8//IGNORE <<< "$dcm_content" | awk -F 'sWipMemBlock.alFree\\[20\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
+ld=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[0\\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
+pld=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[1\\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
+nbs=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[11\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
+m0_scale=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[20\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 
 # Merge Data
 fslmerge -t ${out_dir}/all_data.nii.gz $m0_file $asl_file
@@ -127,12 +128,11 @@ list=("arterial" "cortical" "subcortical" "thalamus") ##list of ROIs
 
 for str in "${list[@]}" 
 do
+  echo ${str}
 
-echo ${str}
+  touch ${stats}/tmp_$str.txt
 
-touch ${stats}/tmp_$str.txt
-
-touch ${stats}/cbf_$str.txt
+  touch ${stats}/cbf_$str.txt
 
 ${ANTSPATH}/WarpImageMultiTransform 3 ${std}/${str}.nii.gz ${out_dir}/w_${str}.nii.gz -R ${out_dir}/sub_av.nii.gz --use-NN -i ${out_dir}/ind2temp0GenericAffine.mat ${out_dir}/ind2temp1InverseWarp.nii.gz
 
@@ -147,3 +147,6 @@ ${ANTSPATH}/WarpImageMultiTransform 3 ${out_dir}/sub_av.nii.gz ${out_dir}/s_ind2
 ${ANTSPATH}/WarpImageMultiTransform 3 ${out_dir}/cbf.nii.gz ${out_dir}/wcbf.nii.gz -R ${out_dir}/ind2temp_warped.nii.gz --use-BSpline ${out_dir}/swarp.nii.gz ${out_dir}/ind2temp0GenericAffine.mat
 ${ANTSPATH}/WarpImageMultiTransform 3 ${out_dir}/t1.nii.gz ${out_dir}/wt1.nii.gz -R ${out_dir}/ind2temp_warped.nii.gz --use-BSpline ${out_dir}/swarp.nii.gz ${out_dir}/ind2temp0GenericAffine.mat
 #wt1: t1 relaxation time. common space. 
+
+find ${out_dir}/ -maxdepth 1 \( ! -name cbf.nii.gz -a ! -name stats -a ! -name .data -a ! -path ${out_dir}/ \) -print0 | xargs -0 -I {} mv {} ${out_dir}/.data/
+
