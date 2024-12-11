@@ -1,6 +1,6 @@
 #!/bin/bash
 
-## script created by Manuel Tsao
+## script created by Manuel Taso
 ## script edited and uploaded to FW by krj
 
 ##
