@@ -15,6 +15,7 @@ dicom_dir='/flywheel/v0/input/dicoms'
 out_dir='/flywheel/v0/output'
 std='/flywheel/v0/input/std'
 mkdir ${out_dir}/.data
+mkdir /flywheel/v0/input/dicoms
 
 if [ ! -d /flywheel/v0/output/stats ]; then
   mkdir /flywheel/v0/output/stats
@@ -79,7 +80,7 @@ done
 
 # Find out data paths for m0 and asl files
 m0_file=$(find ${out_dir} -maxdepth 1 -type f -name "*M0*.nii" -print | tail -n 1)
-asl_file=$(find ${out_dir} 1 -type f -name "*ASL*.nii" -print | tail -n 1)
+asl_file=$(find ${out_dir} -maxdepth 1 -type f -name "*ASL*.nii" -print | tail -n 1)
 
 # Extract dicom header info to get parameters for cbf calculation
 dcm_file=$(find ${data_dir}/dicoms -maxdepth 2 -type f | head -n 1)
