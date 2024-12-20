@@ -14,9 +14,9 @@ data_dir='/flywheel/v0/input'
 dicom_dir='/flywheel/v0/input/dicoms'
 out_dir='/flywheel/v0/output'
 std='/flywheel/v0/input/std'
-mkdir ${out_dir}/.data
+[ -e ${out_dir}/.data ] || mkdir ${out_dir}/.data
 mkdir /flywheel/v0/input/dicoms
-mkdir /flywheel/v0/output/viz
+[ -e flywheel/v0/output/viz ] || mkdir /flywheel/v0/output/viz
 viz='/flywheel/v0/output/viz'
 
 if [ ! -d /flywheel/v0/output/stats ]; then
