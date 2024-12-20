@@ -84,8 +84,10 @@ asl_file=$(find ${out_dir} -maxdepth 1 -type f -name "*ASL*.nii" -print | tail -
 
 # Extract dicom header info to get parameters for cbf calculation
 dcm_file=$(find ${data_dir}/dicoms -maxdepth 2 -type f | head -n 1)
-
-dcm_content=$(<$dcm_file)
+if [ -z "$dcm_file" ]; then
+	echo "No dcm file!"
+	exit 1
+fi
 
 ld=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[0\\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 pld=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[1\\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
