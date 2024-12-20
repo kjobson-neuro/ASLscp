@@ -16,6 +16,8 @@ out_dir='/flywheel/v0/output'
 std='/flywheel/v0/input/std'
 mkdir ${out_dir}/.data
 mkdir /flywheel/v0/input/dicoms
+mkdir /flywheel/v0/output/viz
+viz='/flywheel/v0/output/viz'
 
 if [ ! -d /flywheel/v0/output/stats ]; then
   mkdir /flywheel/v0/output/stats
@@ -85,7 +87,7 @@ asl_file=$(find ${out_dir} -maxdepth 1 -type f -name "*ASL*.nii" -print | tail -
 # Extract dicom header info to get parameters for cbf calculation
 dcm_file=$(find ${data_dir}/dicoms -maxdepth 2 -type f | head -n 1)
 if [ -z "$dcm_file" ]; then
-	echo "No dcm file!"
+	echo "No dicom file!"
 	exit 1
 fi
 
@@ -151,5 +153,10 @@ ${ANTSPATH}/WarpImageMultiTransform 3 ${out_dir}/cbf.nii.gz ${out_dir}/wcbf.nii.
 ${ANTSPATH}/WarpImageMultiTransform 3 ${out_dir}/t1.nii.gz ${out_dir}/wt1.nii.gz -R ${out_dir}/ind2temp_warped.nii.gz --use-BSpline ${out_dir}/swarp.nii.gz ${out_dir}/ind2temp0GenericAffine.mat
 #wt1: t1 relaxation time. common space. 
 
-find ${out_dir}/ -maxdepth 1 \( ! -name cbf.nii.gz -a ! -name stats -a ! -name .data -a ! -path ${out_dir}/ \) -print0 | xargs -0 -I {} mv {} ${out_dir}/.data/
+### Visualizations
+python3 -m pip install nilearn
+python3 /flywheel/v0/workflows/viz.py -cbf ${out_dir}/cbf.nii.gz -out ${viz}/
+
+## Keep only necessary files visible, store everything else in a hidden directory
+find ${out_dir}/ -maxdepth 1 \( ! -name cbf.nii.gz -a ! -name viz -a ! -name stats -a ! -name .data -a ! -path ${out_dir}/ \) -print0 | xargs -0 -I {} mv {} ${out_dir}/.data/
 
