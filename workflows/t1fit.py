@@ -8,9 +8,8 @@ import sys
 
 m0_ir_file = sys.argv[1]
 mask = sys.argv[2]
-
-out_dir = '/flywheel/v0/output'
-stats_dir = '/flywheel/v0/output/stats'
+out_dir = sys.arg[3]
+stats_dir = sys.arg[4]
 
 ref_data = nib.load(m0_ir_file).get_fdata().astype(np.float64)
 

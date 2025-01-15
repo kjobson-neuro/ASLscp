@@ -1,5 +1,52 @@
 {
     "config": {},
-    "inputs": {},
+    "inputs": {
+        "dicom_asl": {
+            "base": "file",
+            "location": {
+                "name": "1.3.12.2.1107.5.2.43.66044.2024021512485272908730820.0.0.0.dicom",
+                "path": "/flywheel/v0/input/dicom_asl/1.3.12.2.1107.5.2.43.66044.2024021512485272908730820.0.0.0.dicom"
+            },
+            "object": {
+                "size": 12864,
+                "type": null,
+                "mimetype": "application/octet-stream",
+                "modality": null,
+                "classification": {},
+                "tags": [],
+                "info": {},
+                "zip_member_count": null,
+                "version": 1,
+                "file_id": "",
+                "origin": {
+                    "type": "user",
+                    "id": ""
+                }
+            }
+        },
+        "dicom_m0": {
+            "base": "file",
+            "location": {
+                "name": "1.3.12.2.1107.5.2.43.66044.2024021512483764200030738.0.0.0.dicom",
+                "path": "/flywheel/v0/input/dicom_m0/1.3.12.2.1107.5.2.43.66044.2024021512483764200030738.0.0.0.dicom"
+            },
+            "object": {
+                "size": 2624,
+                "type": null,
+                "mimetype": "application/octet-stream",
+                "modality": null,
+                "classification": {},
+                "tags": [],
+                "info": {},
+                "zip_member_count": null,
+                "version": 1,
+                "file_id": "",
+                "origin": {
+                    "type": "user",
+                    "id": ""
+                }
+            }
+        }
+    },
     "destination": {}
 }

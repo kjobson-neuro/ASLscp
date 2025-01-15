@@ -5,7 +5,6 @@ import subprocess
 import argparse
 import sys
 
-out_dir = '/flywheel/v0/output/'
 parser = argparse.ArgumentParser(description='get dcm parameters from the pipeline script')
 
 # Set up parser for the parameters extracted from the dicom header
@@ -16,6 +15,7 @@ parser.add_argument('-ld',  type=int, help='An integer number.')
 parser.add_argument('-pld', type=int, help='An integer number.')
 parser.add_argument('-nbs', type=int, help='An integer number.')
 parser.add_argument('-scale',type=float, help='An integer number.')
+parser.add_argument('-out',type=str, help='The output directory.')
 args = parser.parse_args()
 
 nameref = args.m0
@@ -42,6 +42,8 @@ cbf[np.isinf(cbf) | np.isnan(cbf)] = 0
 cbf = cbf * mask_data
 
 modified_img = nib.Nifti1Image(cbf, nib.load(namemask).affine, nib.load(namemask).header)
+
+out_dir = args.out
 
 nameout = os.path.join(out_dir, 'cbf.nii.gz')
 nib.save(modified_img, nameout)
