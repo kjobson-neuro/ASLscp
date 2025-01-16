@@ -9,7 +9,7 @@
 
 # Load config or inputs manually
 CmdName=$(basename "$0")
-Syntax="${CmdName} [-c config][-a ASLZip][-n][-m M0Zip][-t][-v][(VerifyAlohaInputs|AlohaT1T2TaggingReport|RunAloha|CalculateAtrophy)]"
+Syntax="${CmdName} [-c config][-a ASLZip][-n][-m M0Zip][-v]"
 function sys {
 	[ -n "${opt_n}${opt_v}" ] && echo "$@" 1>&2
 	[ -n "$opt_n" ] || "$@"
@@ -17,7 +17,7 @@ function sys {
 while getopts a:c:i:m:ntv arg
 do
 	case "$arg" in
-		a|c|m|n|t|v)
+		a|c|m|n|v)
 			eval "opt_${arg}='${OPTARG:=1}'"
 			;;
 	esac

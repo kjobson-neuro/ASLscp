@@ -2,7 +2,7 @@
   "author": "Manuel <manuel.taso@gmail.com>",
   "maintainer": "Katie Jobson <k.r.jobson@gmail.com>",
   "cite": "",
-  "name": "ASLscp-single",
+  "name": "aslscp",
   "source": "",
   "url": "https://github.com/kjobson-neuro/ASLscp",
   "label": "ASL Single-PLD Processing",
@@ -10,7 +10,7 @@
   "command": "/flywheel/v0/pipeline_singlePLD.sh",
   "config": {},
   "license": "MIT",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "environment": {
     "FLYWHEEL": "/flywheel/v0",
     "PYTHON_GET_PIP_URL": "https://github.com/pypa/get-pip/raw/0d8570dc44796f4369b652222cf176b3db6ac70e/public/get-pip.py",
