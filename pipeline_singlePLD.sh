@@ -73,13 +73,15 @@ if file "$asl_zip" | grep -q 'Zip archive data'; then
 	unzip -d "$dcmdir" "$asl_zip"  
 	dcm2niix -f %d -b y -o ${workdir}/ "$dcmdir"
 else
-	dcm2niix -f %d -b y -o ${workdir}/ "$asl_zip"
+	cp -r "$asl_zip" ${dcmdir}/
+        dcm2niix -f %d -b y -o ${workdir}/ "$asl_zip"
 fi
 
 if file "$m0_zip" | grep -q 'Zip archive data'; then
 	unzip -d "$dcmdir" "$m0_zip"
 	dcm2niix -f %d -b y -o ${workdir}/ "$dcmdir"
 else
+	cp -r "$m0_zip" ${dcmdir}/
 	dcm2niix -f %d -b y -o ${workdir}/ "$m0_zip"
 fi
 
@@ -125,14 +127,16 @@ m0_file=$(find ${workdir} -maxdepth 1 -type f -name "*M0*.nii" -print | tail -n 
 asl_file=$(find ${workdir} -maxdepth 1 -type f -name "*ASL*.nii" -print | tail -n 1)
 
 # Extract dicom header info to get parameters for cbf calculation
-dcm_file=$(find ${asl_zip}/ -maxdepth 2 -type f | head -n 1)
+dcm_file=$(find ${dcmdir}/ -maxdepth 2 -type f | head -n 1)
 if [ -z "$dcm_file" ]; then
 	echo "No dicom file!"
 	exit 1
 fi
 
 ld=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[0\\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
+echo $ld
 pld=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[1\\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
+echo $pld
 nbs=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[11\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 m0_scale=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[20\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 

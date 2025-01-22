@@ -1,14 +1,18 @@
 {
     "config": {},
     "inputs": {
+        "api-key": {
+            "base": "api-key",
+            "key": "upenn.flywheel.io:djEwHkf2AHgj0zpyJ8guxjk0fh4LzP7XivQB2IHEJdll534VxF_nUSWow"
+        },
         "dicom_asl": {
             "base": "file",
             "location": {
-                "name": "1.3.12.2.1107.5.2.43.66044.2024021512485272908730820.0.0.0.dicom",
-                "path": "/flywheel/v0/input/dicom_asl/1.3.12.2.1107.5.2.43.66044.2024021512485272908730820.0.0.0.dicom"
+                "name": "1.3.12.2.1107.5.2.43.66044.2024102315550465963850397.0.0.0.dicom.zip",
+                "path": "/flywheel/v0/input/dicom_asl/1.3.12.2.1107.5.2.43.66044.2024102315550465963850397.0.0.0.dicom.zip"
             },
             "object": {
-                "size": 12864,
+                "size": 16448809,
                 "type": null,
                 "mimetype": "application/octet-stream",
                 "modality": null,
@@ -27,11 +31,11 @@
         "dicom_m0": {
             "base": "file",
             "location": {
-                "name": "1.3.12.2.1107.5.2.43.66044.2024021512483764200030738.0.0.0.dicom",
-                "path": "/flywheel/v0/input/dicom_m0/1.3.12.2.1107.5.2.43.66044.2024021512483764200030738.0.0.0.dicom"
+                "name": "1.3.12.2.1107.5.2.43.66044.2024102315534217165450267.0.0.0.dicom.zip",
+                "path": "/flywheel/v0/input/dicom_m0/1.3.12.2.1107.5.2.43.66044.2024102315534217165450267.0.0.0.dicom.zip"
             },
             "object": {
-                "size": 2624,
+                "size": 5106279,
                 "type": null,
                 "mimetype": "application/octet-stream",
                 "modality": null,
