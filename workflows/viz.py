@@ -19,7 +19,6 @@ args = parser.parse_args()
 # Load the images
 mcbf_img = args.cbf
 mcbf_nii = nb.load(mcbf_img)
-print(mcbf_nii)
 outputdir = args.out
 
 # Plot the mean CBF map with two different vmax

@@ -14,7 +14,7 @@ function sys {
 	[ -n "${opt_n}${opt_v}" ] && echo "$@" 1>&2
 	[ -n "$opt_n" ] || "$@"
 }
-while getopts a:c:i:m:ntv arg
+while getopts a:c:i:m:nv arg
 do
 	case "$arg" in
 		a|c|m|n|v)
@@ -38,7 +38,6 @@ if [ -n "$opt_a" ]; then
 	asl_zip="$opt_a"
 else
 	asl_zip=$( jq '.inputs.dicom_asl.location.path' "$ConfigJsonFile" | tr -d '"' )
-        echo $asl_zip
 fi
 
 if [ -n "$opt_m" ]; then
@@ -74,7 +73,7 @@ if file "$asl_zip" | grep -q 'Zip archive data'; then
 	dcm2niix -f %d -b y -o ${workdir}/ "$dcmdir"
 else
 	cp -r "$asl_zip" ${dcmdir}/
-        dcm2niix -f %d -b y -o ${workdir}/ "$asl_zip"
+	dcm2niix -f %d -b y -o ${workdir}/ "$asl_zip"
 fi
 
 if file "$m0_zip" | grep -q 'Zip archive data'; then
@@ -134,9 +133,7 @@ if [ -z "$dcm_file" ]; then
 fi
 
 ld=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[0\\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
-echo $ld
 pld=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[1\\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
-echo $pld
 nbs=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[11\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 m0_scale=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[20\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 
@@ -159,9 +156,9 @@ asl_file --data=${workdir}/asl_mc.nii.gz --ntis=1 --iaf=tc --diff --out=${workdi
 fslmaths ${workdir}/sub.nii.gz -abs -Tmean ${workdir}/sub_av.nii.gz
 
 ### Calculate CBF 
-python3 /flywheel/v0/workflows/cbf_calc.py -m0 ${workdir}/m0_mc.nii.gz -asl ${workdir}/sub_av.nii.gz -m ${workdir}/mask.nii.gz -ld $ld -pld $pld -nbs $nbs -scale $m0_scale -out $workdir
+python3 /flywheel/v0/workflows/cbf_calc.py -m0 ${workdir}/m0_mc.nii.gz -asl ${workdir}/sub_av.nii.gz -m ${workdir}/mask.nii.gz -ld $ld -pld $pld -nbs $nbs -scale $m0_scale -out ${workdir}
 # Fit T1 with function z. Skip this step for the recover project bc t1 data is messed up.
-python3 /flywheel/v0/workflows/t1fit.py ${workdir}/m0_ir_mc.nii.gz ${workdir}/mask.nii.gz ${workdir} ${stats}
+python3 /flywheel/v0/workflows/t1fit.py -m0_ir ${workdir}/m0_ir_mc.nii.gz -m ${workdir}/mask.nii.gz -out ${workdir} -stats ${stats}
 
 # Smoothing ASL image subject space, deforming images to match template
 fslmaths ${workdir}/sub_av.nii.gz -s 1.5 -mas ${workdir}/mask.nii.gz ${workdir}/s_asl.nii.gz 
@@ -183,11 +180,38 @@ do
 
   touch ${stats}/cbf_$str.txt
 
-${ANTSPATH}/WarpImageMultiTransform 3 ${std}/${str}.nii.gz ${workdir}/w_${str}.nii.gz -R ${workdir}/sub_av.nii.gz --use-NN -i ${workdir}/ind2temp0GenericAffine.mat ${workdir}/ind2temp1InverseWarp.nii.gz
+  ${ANTSPATH}/WarpImageMultiTransform 3 ${std}/${str}.nii.gz ${workdir}/w_${str}.nii.gz -R ${workdir}/sub_av.nii.gz --use-NN -i ${workdir}/ind2temp0GenericAffine.mat ${workdir}/ind2temp1InverseWarp.nii.gz
 
-fslstats -K ${workdir}/w_${str}.nii.gz ${workdir}/cbf.nii.gz -M -S > ${stats}/tmp_${str}.txt
+  fslstats -K ${workdir}/w_${str}.nii.gz ${workdir}/cbf.nii.gz -M -S > ${stats}/tmp_${str}.txt
 
-paste ${std}/${str}_label.txt -d ' ' ${stats}/tmp_${str}.txt > ${stats}/cbf_${str}.txt #combine label with values
+  paste ${std}/${str}_label.txt -d ' ' ${stats}/tmp_${str}.txt > ${stats}/cbf_${str}.txt #combine label with values
+done
+## Format text files to look nice
+# Create a temporary file
+for str in "${list[@]}"
+do  
+  input_cbf="${stats}/cbf_${str}.txt"
+  output_cbf="${stats}/formatted_cbf_${str}.txt"
+  temp_dir="/flywheel/v0/work/temp_$(date +%s)"
+  mkdir -p "$temp_dir"
+
+# Create a temporary file
+  temp_file="$temp_dir/tmp_cbf_${str}.txt"
+
+# Add headers to the temporary file
+  echo "Region | Mean CBF | Standard Deviation" > "$temp_file"
+
+# Process the input file and append to the temporary file
+  while read -r region mean_cbf std_dev; do
+    rounded_mean_cbf=$(printf "%.1f" "$mean_cbf")
+    rounded_std_dev=$(printf "%.1f" "$std_dev")  
+    echo "$region | $rounded_mean_cbf | $rounded_std_dev" >> "$temp_file"
+  done < "$input_cbf"
+
+# Replace the original file with the formatted version
+  column -t -s '|' -o '|' "$temp_file" > "$output_cbf"
+  
+  rm -rf "$temp_dir"
 done
 
 # Smoothing the deformation field of images obtained previously

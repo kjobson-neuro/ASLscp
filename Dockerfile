@@ -159,6 +159,7 @@ RUN apt-get update && \
                     pipx \
                     dcm2niix \
                     libc6-amd64-cross \
+                    bsdmainutils \
                     unzip && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 

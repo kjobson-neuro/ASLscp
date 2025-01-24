@@ -5,8 +5,8 @@
   "name": "aslscp",
   "source": "",
   "url": "https://github.com/kjobson-neuro/ASLscp",
-  "label": "ASLscp: ASL Self-Contained Processing",
-  "description": "Gear for minimal processing of single-PLD ASL",
+  "label": "ASL Single-PLD Processing",
+  "description": "Gear for single-PLD ASL minimal processing",
   "command": "/flywheel/v0/pipeline_singlePLD.sh",
   "config": {},
   "license": "MIT",
@@ -51,13 +51,16 @@
   "custom": {
     "gear-builder": {
       "category": "analysis",
-      "image": "kjobson/aslscp:0.1.1"
+      "image": "kjobson/aslgear:0.1.1"
     },
     "flywheel": {
       "suite": "BrainScienceCenter"
     }
   },
   "inputs": {
+    "api_key": {
+      "base": "api-key"
+    },
     "dicom_asl": {
       "base": "file",
       "description": "Full path to the dicom input files"
