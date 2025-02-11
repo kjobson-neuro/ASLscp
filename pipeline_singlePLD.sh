@@ -157,6 +157,7 @@ fslmaths ${workdir}/sub.nii.gz -abs -Tmean ${workdir}/sub_av.nii.gz
 
 ### Calculate CBF 
 python3 /flywheel/v0/workflows/cbf_calc.py -m0 ${workdir}/m0_mc.nii.gz -asl ${workdir}/sub_av.nii.gz -m ${workdir}/mask.nii.gz -ld $ld -pld $pld -nbs $nbs -scale $m0_scale -out ${workdir}
+
 # Fit T1 with function z. Skip this step for the recover project bc t1 data is messed up.
 python3 /flywheel/v0/workflows/t1fit.py -m0_ir ${workdir}/m0_ir_mc.nii.gz -m ${workdir}/mask.nii.gz -out ${workdir} -stats ${stats}
 
@@ -171,21 +172,16 @@ ${ANTSPATH}/WarpImageMultiTransform 3 ${std}/batsasl/bats_cbf.nii.gz ${workdir}/
 list=("arterial" "cortical" "subcortical" "thalamus") ##list of ROIs
 
 # deforming ROI
-
 for str in "${list[@]}" 
 do
   echo ${str}
-
   touch ${stats}/tmp_$str.txt
-
   touch ${stats}/cbf_$str.txt
-
   ${ANTSPATH}/WarpImageMultiTransform 3 ${std}/${str}.nii.gz ${workdir}/w_${str}.nii.gz -R ${workdir}/sub_av.nii.gz --use-NN -i ${workdir}/ind2temp0GenericAffine.mat ${workdir}/ind2temp1InverseWarp.nii.gz
-
   fslstats -K ${workdir}/w_${str}.nii.gz ${workdir}/cbf.nii.gz -M -S > ${stats}/tmp_${str}.txt
-
   paste ${std}/${str}_label.txt -d ' ' ${stats}/tmp_${str}.txt > ${stats}/cbf_${str}.txt #combine label with values
 done
+
 ## Format text files to look nice
 # Create a temporary file
 for str in "${list[@]}"
@@ -221,11 +217,20 @@ ${ANTSPATH}/WarpImageMultiTransform 3 ${workdir}/cbf.nii.gz ${workdir}/wcbf.nii.
 ${ANTSPATH}/WarpImageMultiTransform 3 ${workdir}/t1.nii.gz ${workdir}/wt1.nii.gz -R ${workdir}/ind2temp_warped.nii.gz --use-BSpline ${workdir}/swarp.nii.gz ${workdir}/ind2temp0GenericAffine.mat
 #wt1: t1 relaxation time. common space. 
 
+### tSNR calculation
+fslmaths ${workdir}/sub.nii.gz -Tmean ${workdir}/sub_mean.nii.gz
+fslmaths ${workdir}/sub.nii.gz -Tstd ${workdir}/sub_std.nii.gz
+fslmaths ${workdir}/sub_mean.nii.gz -div ${workdir}/sub_std.nii.gz ${workdir}/tSNR_map.nii.gz
+
 ### Visualizations
 python3 -m pip install nilearn
-python3 /flywheel/v0/workflows/viz.py -cbf ${workdir}/cbf.nii.gz -out ${viz}/
+
+for str in "${list[@]}"
+do
+python3 /flywheel/v0/workflows/viz.py -cbf ${workdir}/cbf.nii.gz -out ${viz}/ -seg ${workdir}/w_${str}.nii.gz
+done
 
 ## Move all files we want easy access to into the output directory
-find ${workdir} -maxdepth 1 \( -name "cbf.nii.gz" -o -name "viz" -o -name "stats" \) -print0 | xargs -0 -I {} mv {} ${export_dir}/
-
+find ${workdir} -maxdepth 1 \( -name "cbf.nii.gz" -o -name "viz" -o -name "stats" -o -name "t1.nii.gz" -o -name "tSNR_map.nii.gz" \) -print0 | xargs -0 -I {} mv {} ${export_dir}/
+mv ${export_dir}/stats/tmp* ${workdir}/ 
 

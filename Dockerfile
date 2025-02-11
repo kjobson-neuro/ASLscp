@@ -126,6 +126,7 @@ ENV ANTSPATH="/opt/ants-2.4.3/bin" \
 # FSL environment
 ENV LANG="C.UTF-8" \
     LC_ALL="C.UTF-8" \
+    LC_NUMERIC="en_US.UTF-8" \
     PYTHONNOUSERSITE=1 \
     FSLDIR="/opt/fsl-6.0.7.1" \
     FSLOUTPUTTYPE="NIFTI_GZ" \

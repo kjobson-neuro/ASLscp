@@ -1,0 +1,52 @@
+{
+    "config": {},
+    "inputs": {
+        "dicom_asl": {
+            "base": "file",
+            "location": {
+                "name": "1.3.12.2.1107.5.2.43.66044.2024102315550465963850397.0.0.0.dicom.zip",
+                "path": "/flywheel/v0/input/dicom_asl/1.3.12.2.1107.5.2.43.66044.2024102315550465963850397.0.0.0.dicom.zip"
+            },
+            "object": {
+                "size": 16448809,
+                "type": null,
+                "mimetype": "application/octet-stream",
+                "modality": null,
+                "classification": {},
+                "tags": [],
+                "info": {},
+                "zip_member_count": null,
+                "version": 1,
+                "file_id": "",
+                "origin": {
+                    "type": "user",
+                    "id": ""
+                }
+            }
+        },
+        "dicom_m0": {
+            "base": "file",
+            "location": {
+                "name": "1.3.12.2.1107.5.2.43.66044.2024102315534217165450267.0.0.0.dicom.zip",
+                "path": "/flywheel/v0/input/dicom_m0/1.3.12.2.1107.5.2.43.66044.2024102315534217165450267.0.0.0.dicom.zip"
+            },
+            "object": {
+                "size": 5106279,
+                "type": null,
+                "mimetype": "application/octet-stream",
+                "modality": null,
+                "classification": {},
+                "tags": [],
+                "info": {},
+                "zip_member_count": null,
+                "version": 1,
+                "file_id": "",
+                "origin": {
+                    "type": "user",
+                    "id": ""
+                }
+            }
+        }
+    },
+    "destination": {}
+}
