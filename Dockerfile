@@ -171,7 +171,8 @@ RUN pipx install numpy \
     && pipx install nibabel \
     && pipx install matplotlib --include-deps \
     && pipx install transforms3d --include-deps \
-    && pipx install flywheel-sdk --include-deps
+    && pipx install flywheel-sdk --include-deps \
+    && pip3 install aspose-words
 
 # Copy stuff over & change permissions
 COPY ./input/ ${FLYWHEEL}/input/

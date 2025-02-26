@@ -169,7 +169,7 @@ echo "ANTs Registration finished"
 # Warping atlases, deforming ROI
 # Standardize CBF images to a common template
 ${ANTSPATH}/WarpImageMultiTransform 3 ${std}/batsasl/bats_cbf.nii.gz ${workdir}/w_batscbf.nii.gz -R ${workdir}/sub_av.nii.gz --use-BSpline -i ${workdir}/ind2temp0GenericAffine.mat ${workdir}/ind2temp1InverseWarp.nii.gz
-list=("arterial" "cortical" "subcortical" "thalamus") ##list of ROIs
+list=("arterial2" "cortical" "subcortical" "thalamus") ##list of ROIs
 
 # deforming ROI
 for str in "${list[@]}" 
@@ -224,13 +224,12 @@ fslmaths ${workdir}/sub_mean.nii.gz -div ${workdir}/sub_std.nii.gz ${workdir}/tS
 
 ### Visualizations
 python3 -m pip install nilearn
+python3 /flywheel/v0/workflows/viz.py -cbf ${workdir}/cbf.nii.gz -t1 ${workdir}/t1.nii.gz -out ${viz}/ -seg_folder ${workdir}/ -seg ${list[@]}
 
-for str in "${list[@]}"
-do
-python3 /flywheel/v0/workflows/viz.py -cbf ${workdir}/cbf.nii.gz -out ${viz}/ -seg ${workdir}/w_${str}.nii.gz
-done
+### Create HTML file and output data into it for easy viewing
+python3 /flywheel/v0/workflows/create_html.py -viz ${viz} -stats ${stats}/ -out ${workdir}/ -seg_folder ${workdir}/ -seg ${list[@]}
 
 ## Move all files we want easy access to into the output directory
-find ${workdir} -maxdepth 1 \( -name "cbf.nii.gz" -o -name "viz" -o -name "stats" -o -name "t1.nii.gz" -o -name "tSNR_map.nii.gz" \) -print0 | xargs -0 -I {} mv {} ${export_dir}/
+find ${workdir} -maxdepth 1 \( -name "cbf.nii.gz" -o -name "viz" -o -name "stats" -o -name "t1.nii.gz" -o -name "tSNR_map.nii.gz" -o -name "Output.html" \) -print0 | xargs -0 -I {} mv {} ${export_dir}/
 mv ${export_dir}/stats/tmp* ${workdir}/ 
 
