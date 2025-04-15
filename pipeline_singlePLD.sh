@@ -60,8 +60,10 @@ viz='/flywheel/v0/output/viz'
 [ -e "$viz" ] || mkdir "$viz"
 workdir='/flywheel/v0/work'
 [ -e "$workdir" ] || mkdir "$workdir"
-dcmdir='/flywheel/v0/work/dcmdir'
-[ -e "$dcmdir" ] || mkdir "$dcmdir"
+m0_dcmdir='/flywheel/v0/work/m0_dcmdir'
+[ -e "$m0_dcmdir" ] || mkdir "$m0_dcmdir"
+asl_dcmdir='/flywheel/v0/work/asl_dcmdir'
+[ -e "$asl_dcmdir" ] || mkdir "$asl_dcmdir"
 stats='/flywheel/v0/output/stats'
 [ -e "$stats" ] || mkdir "$stats"
 
@@ -69,19 +71,19 @@ stats='/flywheel/v0/output/stats'
 # Unzip if so
 
 if file "$asl_zip" | grep -q 'Zip archive data'; then
-	unzip -d "$dcmdir" "$asl_zip"  
-	dcm2niix -f %d -b y -o ${workdir}/ "$dcmdir"
+	unzip -d "$asl_dcmdir" "$asl_zip"  
+	dcm2niix -f %d -b y -o ${asl_dcmdir}/ "$asl_dcmdir"
 else
-	cp -r "$asl_zip" ${dcmdir}/
-	dcm2niix -f %d -b y -o ${workdir}/ "$asl_zip"
+	cp -r "$asl_zip" ${asl_dcmdir}/
+	dcm2niix -f %d -b y -o ${asl_dcmdir}/ "$asl_zip"
 fi
 
 if file "$m0_zip" | grep -q 'Zip archive data'; then
-	unzip -d "$dcmdir" "$m0_zip"
-	dcm2niix -f %d -b y -o ${workdir}/ "$dcmdir"
+	unzip -d "$m0_dcmdir" "$m0_zip"
+	dcm2niix -f %d -b y -o ${m0_dcmdir}/ "$m0_dcmdir"
 else
-	cp -r "$m0_zip" ${dcmdir}/
-	dcm2niix -f %d -b y -o ${workdir}/ "$m0_zip"
+	cp -r "$m0_zip" ${m0_dcmdir}/
+	dcm2niix -f %d -b y -o ${m0_dcmdir}/ "$m0_zip"
 fi
 
 # Dcm2niix doesn't always work first try, so check and redo if files aren't present
@@ -94,8 +96,8 @@ while (( attempt <= max_attempts )); do
     echo "Attempt $attempt of $max_attempts..."
 
     # Use find to locate the files
-    asl_file=$(find "$workdir" -maxdepth 1 -type f -name "*ASL.nii")
-    m0_file=$(find "$workdir" -maxdepth 1 -type f -name "*M0.nii")
+    asl_file=$(find "$asl_dcmdir" -maxdepth 1 -type f -name "*ASL.nii")
+    m0_file=$(find "$m0_dcmdir" -maxdepth 1 -type f -name "*M0.nii")
 
     # Debugging output
     echo "ASL file: $asl_file"
@@ -122,11 +124,11 @@ while (( attempt <= max_attempts )); do
 done
 
 # Find out data paths for m0 and asl files
-m0_file=$(find ${workdir} -maxdepth 1 -type f -name "*M0*.nii" -print | tail -n 1)
-asl_file=$(find ${workdir} -maxdepth 1 -type f -name "*ASL*.nii" -print | tail -n 1)
+m0_file=$(find ${m0_dcmdir} -maxdepth 1 -type f -name "*M0.nii" -print | tail -n 1)
+asl_file=$(find ${asl_dcmdir} -maxdepth 1 -type f -name "*ASL.nii" -print | tail -n 1)
 
 # Extract dicom header info to get parameters for cbf calculation
-dcm_file=$(find ${dcmdir}/ -maxdepth 2 -type f | head -n 1)
+dcm_file=$(find ${m0_dcmdir}/ -maxdepth 2 -type f | head -n 1)
 if [ -z "$dcm_file" ]; then
 	echo "No dicom file!"
 	exit 1
@@ -136,7 +138,7 @@ ld=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\
 pld=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[1\\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 nbs=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[11\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 m0_scale=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[20\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
-
+echo $ld $pld $nbs $m0_scale
 # Merge Data
 fslmerge -t ${workdir}/all_data.nii.gz $m0_file $asl_file
 
@@ -149,7 +151,8 @@ fslroi ${workdir}/mc.nii.gz ${workdir}/m0_ir_mc.nii.gz 0 2
 fslroi ${workdir}/mc.nii.gz ${workdir}/asl_mc.nii.gz 2 -1
 
 # Skull-Stripping
-mri_synthstrip -i ${workdir}/m0_mc.nii.gz -m ${workdir}/mask.nii.gz
+${FREESURFER_HOME}/bin/mri_synthstrip -i ${workdir}/m0_mc.nii.gz -m ${workdir}/mask.nii.gz
+#bet ${workdir}/m0_mc.nii.gz ${workdir}/m0_mc_brain.nii.gz -R -m
 
 # Merge all data then motion correction by running mcflirt
 asl_file --data=${workdir}/asl_mc.nii.gz --ntis=1 --iaf=tc --diff --out=${workdir}/sub.nii.gz
@@ -163,7 +166,7 @@ python3 /flywheel/v0/workflows/t1fit.py -m0_ir ${workdir}/m0_ir_mc.nii.gz -m ${w
 
 # Smoothing ASL image subject space, deforming images to match template
 fslmaths ${workdir}/sub_av.nii.gz -s 1.5 -mas ${workdir}/mask.nii.gz ${workdir}/s_asl.nii.gz 
-${ANTSPATH}/antsRegistration --dimensionality 3   --transform "Affine[0.25]" --metric "MI[${std}/batsasl/bats_asl_masked.nii.gz,${workdir}/s_asl.nii.gz,1,32]" --convergence 100x20 --shrink-factors 4x1 --smoothing-sigmas 2x0mm --transform "SyN[0.1]" --metric "CC[${std}/batsasl/bats_asl_masked.nii.gz,${workdir}/s_asl.nii.gz,1,1]" --convergence 40x20 --shrink-factors 2x1 --smoothing-sigmas 2x0mm  --output "[${workdir}/ind2temp,${workdir}/ind2temp_warped.nii.gz,${workdir}/temp2ind_warped.nii.gz]" --collapse-output-transforms 1 --interpolation BSpline -v 1
+${ANTSPATH}/antsRegistration --dimensionality 3 --transform "Affine[0.25]" --metric "MI[${std}/batsasl/bats_asl_masked.nii.gz,${workdir}/s_asl.nii.gz,1,32]" --convergence 100x20 --shrink-factors 4x1 --smoothing-sigmas 2x0mm --transform "SyN[0.1]" --metric "CC[${std}/batsasl/bats_asl_masked.nii.gz,${workdir}/s_asl.nii.gz,1,1]" --convergence 40x20 --shrink-factors 2x1 --smoothing-sigmas 2x0mm  --output "[${workdir}/ind2temp,${workdir}/ind2temp_warped.nii.gz,${workdir}/temp2ind_warped.nii.gz]" --collapse-output-transforms 1 --interpolation BSpline -v 1
 echo "ANTs Registration finished"
 
 # Warping atlases, deforming ROI
@@ -182,33 +185,56 @@ do
   paste ${std}/${str}_label.txt -d ' ' ${stats}/tmp_${str}.txt > ${stats}/cbf_${str}.txt #combine label with values
 done
 
-## Format text files to look nice
-# Create a temporary file
-for str in "${list[@]}"
-do  
+# We want just general grey and white matter cbf values, so extract these separately
+mri_binarize -i ${std}/subcortical.nii.gz -o ${workdir}/grey_matter.nii.gz --match 2 13
+mri_binarize -i ${std}/subcortical.nii.gz -o ${workdir}/white_matter.nii.gz --match 1 12
+fslstats -K ${workdir}/grey_matter.nii.gz ${workdir}/cbf.nii.gz -M -S > ${stats}/tmp_grey.txt
+fslstats -K ${workdir}/white_matter.nii.gz ${workdir}/cbf.nii.gz -M -S > ${stats}/tmp_white.txt
+
+new_list=("arterial2" "cortical" "subcortical" "thalamus" "grey" "white") ##list of ROIs
+for str in "${new_list[@]}"
+do
   input_cbf="${stats}/cbf_${str}.txt"
   output_cbf="${stats}/formatted_cbf_${str}.txt"
   temp_dir="/flywheel/v0/work/temp_$(date +%s)"
   mkdir -p "$temp_dir"
-
-# Create a temporary file
+  
+  # Create a temporary file with a header
   temp_file="$temp_dir/tmp_cbf_${str}.txt"
-
-# Add headers to the temporary file
   echo "Region | Mean CBF | Standard Deviation" > "$temp_file"
-
-# Process the input file and append to the temporary file
-  while read -r region mean_cbf std_dev; do
+  
+  while IFS= read -r line; do
+    # Skip blank lines
+    [[ -z "$line" ]] && continue
+    
+    # Extract the last two fields as numbers and the rest as region.
+    # This assumes that the numeric values are the last two fields.
+    mean_cbf=$(echo "$line" | awk '{print $(NF-1)}')
+    std_dev=$(echo "$line" | awk '{print $NF}')
+    region=$(echo "$line" | awk '{
+       for (i=1;i<=NF-2;i++) 
+         printf "%s ", $i;
+       }' | sed 's/[[:space:]]$//')
+    
+    # If region is empty or undesired, skip the line.
+    if [[ -z "$region" || "$region" == "0" ]]; then
+      continue
+    fi
+    
+    # Format numeric values.
     rounded_mean_cbf=$(printf "%.1f" "$mean_cbf")
-    rounded_std_dev=$(printf "%.1f" "$std_dev")  
+    rounded_std_dev=$(printf "%.1f" "$std_dev")
+    
+    # Append the formatted line.
     echo "$region | $rounded_mean_cbf | $rounded_std_dev" >> "$temp_file"
   done < "$input_cbf"
-
-# Replace the original file with the formatted version
+  
+  # Reformat the temporary file into neat columns.
   column -t -s '|' -o '|' "$temp_file" > "$output_cbf"
   
   rm -rf "$temp_dir"
 done
+
 
 # Smoothing the deformation field of images obtained previously
 fslmaths ${workdir}/ind2temp1Warp.nii.gz -s 5 ${workdir}/swarp.nii.gz
@@ -227,9 +253,11 @@ python3 -m pip install nilearn
 python3 /flywheel/v0/workflows/viz.py -cbf ${workdir}/cbf.nii.gz -t1 ${workdir}/t1.nii.gz -out ${viz}/ -seg_folder ${workdir}/ -seg ${list[@]}
 
 ### Create HTML file and output data into it for easy viewing
-python3 /flywheel/v0/workflows/create_html.py -viz ${viz} -stats ${stats}/ -out ${workdir}/ -seg_folder ${workdir}/ -seg ${list[@]}
+python3 /flywheel/v0/workflows/pdf.py -viz ${viz} -stats ${stats}/ -out ${workdir}/ -seg_folder ${workdir}/ -seg ${new_list[@]}
 
 ## Move all files we want easy access to into the output directory
-find ${workdir} -maxdepth 1 \( -name "cbf.nii.gz" -o -name "viz" -o -name "stats" -o -name "t1.nii.gz" -o -name "tSNR_map.nii.gz" -o -name "Output.html" \) -print0 | xargs -0 -I {} mv {} ${export_dir}/
+find ${workdir} -maxdepth 1 \( -name "cbf.nii.gz" -o -name "viz" -o -name "stats" -o -name "t1.nii.gz" -o -name "tSNR_map.nii.gz" -o -name "Output.pdf" \) -print0 | xargs -0 -I {} mv {} ${export_dir}/
 mv ${export_dir}/stats/tmp* ${workdir}/ 
 
+## Zip the output directory for easy download
+zip -r ${export_dir}/output.zip ${export_dir}

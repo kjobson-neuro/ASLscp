@@ -39,73 +39,105 @@ segmentation_images = {}
 
 for i in seg_list:
     file_path = os.path.join(stats_path, f"formatted_cbf_{i}.txt")
+for i in seg_list[:-2]:    
     seg_img = os.path.join(viz_path, f"w_{i}_meanCBF_80_mosaic_prism.png")
     if os.path.exists(file_path):
         formatted_data[i] = read_formatted_file(file_path)
         segmentation_images[i] = seg_img
 
-# Generate HTML content
-html_content = f"""
-<!DOCTYPE html>
-<html>
-<head>
-<title>Pipeline Evaluation</title>
-<style>
-table, th, td {{
-  border: 1px solid black;
-  border-collapse: collapse;
-  padding: 5px;
-  text-align: center;
-}}
-img {{
-  max-width: 800px; /* Adjust as needed */
-  height: auto;
-}}
-</style>
-</head>
-<body>
 
-<h1>Pipeline Evaluation</h1>
+# Generate segmentation sections first
+segmentation_sections = ""
 
-"""
+for prefix, data in formatted_data.items():
+    seg = segmentation_images.get(prefix, "")
 
-for prefix in seg_list:
-    html_content += f"""
-    <h2>{prefix.capitalize()} CBF values extracted from segmentations</h2>
-    <img src="{segmentation_images.get(prefix, '')}" alt="{prefix.capitalize()} Segmentation">
-    <table>
-    <tr>
-        <th>Region</th>
-        <th>Mean CBF</th>
-        <th>Standard Deviation</th>
-    </tr>
+    segmentation_sections += f""" 
+    <div class="segmentation-section">
+        <h2>{prefix.capitalize()} CBF Values</h2>
+        <p>{prefix.capitalize()} CBF values extracted from segmentations</p>
+
+        <h3>CBF Values by Region</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Region</th>
+                    <th>Mean CBF</th>
+                    <th>Standard Deviation</th>
+                </tr>
+            </thead>
+            <tbody>
     """
-    if formatted_data.get(prefix):
-        for region, mean_cbf, std_dev in formatted_data[prefix]:
-            html_content += f"""
+
+    for region, mean_cbf, std_dev in data:
+        segmentation_sections += f"""
             <tr>
                 <td>{region}</td>
                 <td>{mean_cbf}</td>
                 <td>{std_dev}</td>
             </tr>
-            """
-    else:
-        html_content += "<tr><td colspan='3'>No data found for this segmentation.</td></tr>"
+        """
 
-    html_content += """
-    </table>
-    <br>
+    segmentation_sections += f"""
+            </tbody>
+        </table>
+
+        <h3>Segmentation Image</h3>
+        <img src="{seg}" alt="{prefix.capitalize()} Overlay" width="700">
+    </div>
     """
 
-html_content += """
+# Generate final HTML content
+html_content = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASL Gear Output</title>
+    <style>
+        table {{
+            width: 30%;
+            margin-bottom: 20px;
+            border-spacing: 2px;
+            border-collapse: collapse;
+        }}
+        th, td {{
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }}
+        th {{
+            background-color: #f2f2f2;
+        }}
+        .image-container {{
+            display: inline-block;
+            margin: 20px;
+            text-align: center;
+        }}
+    </style>
+</head>
+<body>
+    <h1>ASL Gear Output</h1>
+    
+    <h3>Mean CBF Image</h3>
+    <img src="{viz_path}/meanCBF_mosaic.png" alt="Mean CBF" width="700">
+
+    <h3>T1w Image</h3>
+    <img src="{viz_path}/qT1_mosaic.png" alt="Quantitative T1 Image" width="700">
+
+    {segmentation_sections}
 </body>
 </html>
 """
 
 # Write HTML content to file
-output_file_path = os.path.join(outputdir, "pipeline_evaluation.html")
+output_file_path = os.path.join(outputdir, "Output.html")
 with open(output_file_path, "w") as file:
     file.write(html_content)
 
-print(f"HTML file generated at: {output_file_path}")
+
+
+
+
 

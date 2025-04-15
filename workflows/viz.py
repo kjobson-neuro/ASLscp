@@ -57,6 +57,6 @@ nilearn.plotting.plot_stat_map(mcbf_nii, display_mode='mosaic', bg_img=None, bla
         output_file=os.path.join(outputdir, "meanCBF_mosaic.png"))
 
 nilearn.plotting.plot_stat_map(t1_nii, display_mode='mosaic', bg_img=None, black_bg=True,
-        vmin=500, vmax=2000, cut_coords=8, title="Quantitative_T1",cmap='gray',
+        vmin=500, vmax=2000, cut_coords=8, title="Quantitative_T1",cmap='gist_yarg',
         output_file=os.path.join(outputdir, "qT1_mosaic.png"))
 
