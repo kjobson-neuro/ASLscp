@@ -64,11 +64,11 @@
     "api_key": {
       "base": "api-key"
     },
-    "dicom_asl": {
+    "dicom_m0": {
       "base": "file",
       "description": "Full path to the dicom input files"
     },
-    "dicom_m0": {
+    "dicom_asl": {
       "base": "file",
       "description": "Full path to the dicom input files"
     }

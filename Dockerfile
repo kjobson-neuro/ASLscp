@@ -104,6 +104,8 @@ RUN pip3 install numpy && \
     pip3 install transforms3d && \
     pip3 install flywheel-sdk && \
     pip3 install aspose-words && \
+    pip3 install reportlab && \
+    pip3 install nilearn && \
     rm -rf /root/.cache/pip
 
 # Copy files and set permissions

@@ -129,6 +129,7 @@ asl_file=$(find ${asl_dcmdir} -maxdepth 1 -type f -name "*ASL.nii" -print | tail
 
 # Extract dicom header info to get parameters for cbf calculation
 dcm_file=$(find ${m0_dcmdir}/ -maxdepth 2 -type f | head -n 1)
+echo $dcm_file
 if [ -z "$dcm_file" ]; then
 	echo "No dicom file!"
 	exit 1
@@ -138,7 +139,7 @@ ld=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\
 pld=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[1\\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 nbs=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[11\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 m0_scale=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[20\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
-echo $ld $pld $nbs $m0_scale
+
 # Merge Data
 fslmerge -t ${workdir}/all_data.nii.gz $m0_file $asl_file
 
@@ -152,7 +153,6 @@ fslroi ${workdir}/mc.nii.gz ${workdir}/asl_mc.nii.gz 2 -1
 
 # Skull-Stripping
 ${FREESURFER_HOME}/bin/mri_synthstrip -i ${workdir}/m0_mc.nii.gz -m ${workdir}/mask.nii.gz
-#bet ${workdir}/m0_mc.nii.gz ${workdir}/m0_mc_brain.nii.gz -R -m
 
 # Merge all data then motion correction by running mcflirt
 asl_file --data=${workdir}/asl_mc.nii.gz --ntis=1 --iaf=tc --diff --out=${workdir}/sub.nii.gz
@@ -171,67 +171,73 @@ echo "ANTs Registration finished"
 
 # Warping atlases, deforming ROI
 # Standardize CBF images to a common template
-${ANTSPATH}/WarpImageMultiTransform 3 ${std}/batsasl/bats_cbf.nii.gz ${workdir}/w_batscbf.nii.gz -R ${workdir}/sub_av.nii.gz --use-BSpline -i ${workdir}/ind2temp0GenericAffine.mat ${workdir}/ind2temp1InverseWarp.nii.gz
+# Removed --use-BSpline flag because we do not want to deform the ROIs
+${ANTSPATH}/WarpImageMultiTransform 3 ${std}/batsasl/bats_cbf.nii.gz ${workdir}/w_batscbf.nii.gz -R ${workdir}/sub_av.nii.gz -i ${workdir}/ind2temp0GenericAffine.mat ${workdir}/ind2temp1InverseWarp.nii.gz
 list=("arterial2" "cortical" "subcortical" "thalamus") ##list of ROIs
 
 # deforming ROI
-for str in "${list[@]}" 
+for str in "${list[@]}"
 do
   echo ${str}
-  touch ${stats}/tmp_$str.txt
-  touch ${stats}/cbf_$str.txt
+  touch ${stats}/tmp_${str}.txt
+  touch ${stats}/cbf_${str}.txt
+  touch ${stats}/tmp_${str}_vox.txt
+  ls ${stats}
+  echo "Printed ${stats}"
   ${ANTSPATH}/WarpImageMultiTransform 3 ${std}/${str}.nii.gz ${workdir}/w_${str}.nii.gz -R ${workdir}/sub_av.nii.gz --use-NN -i ${workdir}/ind2temp0GenericAffine.mat ${workdir}/ind2temp1InverseWarp.nii.gz
   fslstats -K ${workdir}/w_${str}.nii.gz ${workdir}/cbf.nii.gz -M -S > ${stats}/tmp_${str}.txt
-  paste ${std}/${str}_label.txt -d ' ' ${stats}/tmp_${str}.txt > ${stats}/cbf_${str}.txt #combine label with values
+  fslstats -K ${workdir}/w_${str}.nii.gz ${workdir}/cbf.nii.gz -V > ${stats}/${str}_vox.txt
+  paste ${std}/${str}_label.txt -d ' ' ${stats}/tmp_${str}.txt ${stats}/${str}_vox.txt > ${stats}/cbf_${str}.txt #combine label with values
 done
 
 # We want just general grey and white matter cbf values, so extract these separately
-mri_binarize -i ${std}/subcortical.nii.gz -o ${workdir}/grey_matter.nii.gz --match 2 13
-mri_binarize -i ${std}/subcortical.nii.gz -o ${workdir}/white_matter.nii.gz --match 1 12
-fslstats -K ${workdir}/grey_matter.nii.gz ${workdir}/cbf.nii.gz -M -S > ${stats}/tmp_grey.txt
-fslstats -K ${workdir}/white_matter.nii.gz ${workdir}/cbf.nii.gz -M -S > ${stats}/tmp_white.txt
+#${FREESURFER_HOME}/bin/mri_binarize -i ${std}/subcortical.nii.gz -o ${workdir}/grey_matter.nii.gz --match 2 13
+#${FREESURFER_HOME}/bin/mri_binarize -i ${std}/subcortical.nii.gz -o ${workdir}/white_matter.nii.gz --match 1 12
+#fslstats -K ${workdir}/grey_matter.nii.gz ${workdir}/cbf.nii.gz -M -S > ${stats}/tmp_grey.txt
+#fslstats -K ${workdir}/white_matter.nii.gz ${workdir}/cbf.nii.gz -M -S > ${stats}/tmp_white.txt
 
-new_list=("arterial2" "cortical" "subcortical" "thalamus" "grey" "white") ##list of ROIs
-for str in "${new_list[@]}"
+#new_list=("arterial2" "cortical" "subcortical" "thalamus" "grey" "white") ##list of ROIs
+for str in "${list[@]}"
 do
   input_cbf="${stats}/cbf_${str}.txt"
   output_cbf="${stats}/formatted_cbf_${str}.txt"
   temp_dir="/flywheel/v0/work/temp_$(date +%s)"
   mkdir -p "$temp_dir"
   
-  # Create a temporary file with a header
+  # Create a temporary file with updated header
+  touch $temp_dir/tmp_cbf_${str}.txt
   temp_file="$temp_dir/tmp_cbf_${str}.txt"
-  echo "Region | Mean CBF | Standard Deviation" > "$temp_file"
+  echo "Region | Mean CBF | Standard Deviation | Voxels | Volume" > "$temp_file"
   
   while IFS= read -r line; do
-    # Skip blank lines
-    [[ -z "$line" ]] && continue
+    [[ -z "$line" ]] && continue  # Skip empty lines
     
-    # Extract the last two fields as numbers and the rest as region.
-    # This assumes that the numeric values are the last two fields.
-    mean_cbf=$(echo "$line" | awk '{print $(NF-1)}')
-    std_dev=$(echo "$line" | awk '{print $NF}')
+    # Extract numeric values (now FOUR columns instead of two)
+    mean_cbf=$(echo "$line" | awk '{print $(NF-3)}')   # 3rd from end
+    std_dev=$(echo "$line" | awk '{print $(NF-2)}')    # 2nd from end
+    voxels=$(echo "$line" | awk '{print $(NF-1)}')     # New voxels column
+    volume=$(echo "$line" | awk '{print $NF}')         # New volume column
+    
+    # Extract region name (now excludes last FOUR fields)
     region=$(echo "$line" | awk '{
-       for (i=1;i<=NF-2;i++) 
-         printf "%s ", $i;
-       }' | sed 's/[[:space:]]$//')
+      for (i=1; i<=NF-4; i++) 
+        printf "%s ", $i;
+    }' | sed 's/[[:space:]]$//')  # Trim trailing space
     
-    # If region is empty or undesired, skip the line.
-    if [[ -z "$region" || "$region" == "0" ]]; then
-      continue
-    fi
+    [[ -z "$region" || "$region" == "0" ]] && continue  # Filter bad entries
     
-    # Format numeric values.
-    rounded_mean_cbf=$(printf "%.1f" "$mean_cbf")
-    rounded_std_dev=$(printf "%.1f" "$std_dev")
+    # Format all numeric values
+    formatted_mean=$(printf "%.1f" "$mean_cbf")
+    formatted_std=$(printf "%.1f" "$std_dev")
+    formatted_voxels=$(printf "%.1f" "$voxels")    # Integer format
+    formatted_volume=$(printf "%.1f" "$volume")    # Integer format
     
-    # Append the formatted line.
-    echo "$region | $rounded_mean_cbf | $rounded_std_dev" >> "$temp_file"
+    # Add all columns to output
+    echo "$region | $formatted_mean | $formatted_std | $formatted_voxels | $formatted_volume" >> "$temp_file"
   done < "$input_cbf"
   
-  # Reformat the temporary file into neat columns.
+  # Format final output
   column -t -s '|' -o '|' "$temp_file" > "$output_cbf"
-  
   rm -rf "$temp_dir"
 done
 
@@ -249,15 +255,17 @@ fslmaths ${workdir}/sub.nii.gz -Tstd ${workdir}/sub_std.nii.gz
 fslmaths ${workdir}/sub_mean.nii.gz -div ${workdir}/sub_std.nii.gz ${workdir}/tSNR_map.nii.gz
 
 ### Visualizations
-python3 -m pip install nilearn
+#python3 -m pip install nilearn
 python3 /flywheel/v0/workflows/viz.py -cbf ${workdir}/cbf.nii.gz -t1 ${workdir}/t1.nii.gz -out ${viz}/ -seg_folder ${workdir}/ -seg ${list[@]}
 
 ### Create HTML file and output data into it for easy viewing
-python3 /flywheel/v0/workflows/pdf.py -viz ${viz} -stats ${stats}/ -out ${workdir}/ -seg_folder ${workdir}/ -seg ${new_list[@]}
+python3 /flywheel/v0/workflows/pdf.py -viz ${viz} -stats ${stats}/ -out ${workdir}/ -seg_folder ${workdir}/ -seg ${list[@]}
 
 ## Move all files we want easy access to into the output directory
-find ${workdir} -maxdepth 1 \( -name "cbf.nii.gz" -o -name "viz" -o -name "stats" -o -name "t1.nii.gz" -o -name "tSNR_map.nii.gz" -o -name "Output.pdf" \) -print0 | xargs -0 -I {} mv {} ${export_dir}/
+find ${workdir} -maxdepth 1 \( -name "cbf.nii.gz" -o -name "viz" -o -name "stats" -o -name "t1.nii.gz" -o -name "tSNR_map.nii.gz" -o -name "output.pdf" \) -print0 | xargs -0 -I {} mv {} ${export_dir}/
 mv ${export_dir}/stats/tmp* ${workdir}/ 
 
 ## Zip the output directory for easy download
+## Also zip work dir so people can look at the intermediate data to troubleshoot
 zip -r ${export_dir}/output.zip ${export_dir}
+zip -r ${export_dir}/work_dir.zip ${workdir}

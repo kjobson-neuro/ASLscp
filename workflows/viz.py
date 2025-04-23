@@ -52,7 +52,7 @@ base_cmap = plt.get_cmap('rainbow')
 color_list = base_cmap(np.linspace(0, 1, n_colors))
 discrete_cmap = ListedColormap(color_list)
 
-nilearn.plotting.plot_stat_map(mcbf_nii, display_mode='mosaic', bg_img=None, black_bg=True, draw_cross=False, cmap=discrete_cmap,
+nilearn.plotting.plot_stat_map(mcbf_nii, display_mode='mosaic', bg_img=None, black_bg=True, draw_cross=False, cmap=base_cmap,
         vmin=0, vmax=100, cut_coords=8, title="meanCBF_mosaic",
         output_file=os.path.join(outputdir, "meanCBF_mosaic.png"))
 

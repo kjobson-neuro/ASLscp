@@ -44,7 +44,7 @@ cbf = cbf * mask_data
 modified_img = nib.Nifti1Image(cbf, nib.load(namemask).affine, nib.load(namemask).header)
 
 out_dir = args.out
-
+print(out_dir)
 nameout = os.path.join(out_dir, 'cbf.nii.gz')
 nib.save(modified_img, nameout)
 

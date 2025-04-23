@@ -1,6 +1,9 @@
 import os
 import argparse
-from xhtml2pdf import pisa
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Image, Paragraph, Spacer
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
 
 def read_formatted_file(file_path):
     try:
@@ -9,64 +12,62 @@ def read_formatted_file(file_path):
             data = []
             for line in content[1:]:  # Skip header line
                 parts = line.split('|')
+                # Ensure there are at least 5 columns
+                if len(parts) < 5:
+                    continue
                 region = parts[0].strip()
                 mean_cbf = parts[1].strip()
                 std_dev = parts[2].strip()
-                data.append((region, mean_cbf, std_dev))
+                vox = parts[3].strip()
+                vol = parts[4].strip()
+                data.append((region, mean_cbf, std_dev, vox, vol))
             return data
     except FileNotFoundError:
         return None
 
-def generate_pdf_content(formatted_data, segmentation_images):
-    pdf_content = """
-    <html>
-    <head>
-        <title>CBF Values from Segmentations</title>
-        <style>
-            table {
-                border-collapse: collapse;
-            }
-            th, td {
-                border: 1px solid black;
-                padding: 5px;
-            }
-        </style>
-    </head>
-    <body>
-    """
-    
+def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=None, qt1_img=None):
+    doc = SimpleDocTemplate(output_path, pagesize=letter)
+    elements = []
+    styles = getSampleStyleSheet()
+
+    # Add mean_CBF and qT1 images if provided
+    if mean_cbf_img and os.path.exists(mean_cbf_img):
+        elements.append(Paragraph("Mean CBF", styles['Heading2']))
+        elements.append(Image(mean_cbf_img, width=400, height=200))
+        elements.append(Spacer(1, 12))
+    if qt1_img and os.path.exists(qt1_img):
+        elements.append(Paragraph("qT1", styles['Heading2']))
+        elements.append(Image(qt1_img))
+        elements.append(Spacer(1, 12))
+
     for prefix, data in formatted_data.items():
+        elements.append(Paragraph(f"{prefix.capitalize()} CBF values extracted from segmentations", styles['Heading2']))
+        elements.append(Spacer(1, 12))
+
         seg_img_path = segmentation_images.get(prefix, "")
-        if seg_img_path:
-            pdf_content += f"""
-            <h2>{prefix.capitalize()} CBF values extracted from segmentations</h2>
-            <img src="{seg_img_path}" alt="Segmentation Image">
-            <table>
-                <tr><th>Region</th><th>Mean CBF</th><th>Standard Deviation</th></tr>
-            """
-            for region, mean_cbf, std_dev in data:
-                pdf_content += f"""
-                <tr><td>{region}</td><td>{mean_cbf}</td><td>{std_dev}</td></tr>
-                """
-            pdf_content += "</table>"
-        else:
-            pdf_content += f"""
-            <h2>{prefix.capitalize()} CBF values extracted from segmentations</h2>
-            <table>
-                <tr><th>Region</th><th>Mean CBF</th><th>Standard Deviation</th></tr>
-            """
-            for region, mean_cbf, std_dev in data:
-                pdf_content += f"""
-                <tr><td>{region}</td><td>{mean_cbf}</td><td>{std_dev}</td></tr>
-                """
-            pdf_content += "</table>"
-    
-    pdf_content += """
-    </body>
-    </html>
-    """
-    
-    return pdf_content
+        if seg_img_path and os.path.exists(seg_img_path):
+            elements.append(Image(seg_img_path, width=400, height=200))
+            elements.append(Spacer(1, 12))
+
+        # Prepare table data
+        table_data = [["Region", "Mean CBF", "Standard Deviation", "Voxels", "Volume"]]
+        for region, mean_cbf, std_dev, vox, vol in data:
+            table_data.append([region, mean_cbf, std_dev, vox, vol])
+
+        table = Table(table_data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.black),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0,0), (-1,0), 12),
+            ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1, 24))
+
+    doc.build(elements)
+    print(f"PDF generated and saved at {output_path}")
 
 def main():
     parser = argparse.ArgumentParser(description='Create PDF file to evaluate pipeline outputs.')
@@ -75,37 +76,34 @@ def main():
     parser.add_argument('-out', type=str, help="The output path.")
     parser.add_argument('-seg_folder', type=str, help="The path to the segmentation files.")
     parser.add_argument('-seg', type=str, nargs='+', help="The list of segmentations to display.")
-    
     args = parser.parse_args()
-    
+
     viz_path = args.viz
     stats_path = args.stats
     seg_folder = args.seg_folder
     seg_list = args.seg
     outputdir = args.out
-    
+
     formatted_data = {}
     segmentation_images = {}
-    
+
     for i in seg_list:
         file_path = os.path.join(stats_path, f"formatted_cbf_{i}.txt")
+        print(f"Checking formatted data: {file_path}")
         seg_img = os.path.join(viz_path, f"w_{i}_meanCBF_80_mosaic_prism.png")
-        
         if os.path.exists(file_path):
-            formatted_data[i] = read_formatted_file(file_path)
-            segmentation_images[i] = seg_img
-    
-    pdf_content = generate_pdf_content(formatted_data, segmentation_images)
-    
+            data = read_formatted_file(file_path)
+            if data:
+                formatted_data[i] = data
+                segmentation_images[i] = seg_img
+
     pdf_path = os.path.join(outputdir, 'output.pdf')
-    
-    with open(pdf_path, "wb") as pdf_file:
-        pisa_status = pisa.CreatePDF(pdf_content, dest=pdf_file)
-    
-    if not pisa_status.err:
-        print(f"PDF generated and saved at {pdf_path}")
-    else:
-        print("PDF generation failed")
+
+    # Add mean_CBF and qT1 images from viz_path
+    mean_cbf_img = os.path.join(viz_path, "meanCBF_mosaic.png")
+    qt1_img = os.path.join(viz_path, "qT1_mosaic.png")
+
+    generate_pdf(formatted_data, segmentation_images, pdf_path, mean_cbf_img=mean_cbf_img, qt1_img=qt1_img)
 
 if __name__ == "__main__":
     main()
