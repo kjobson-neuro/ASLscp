@@ -24,7 +24,7 @@ def read_formatted_file(file_path):
     except FileNotFoundError:
         return []
 
-def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=None, qt1_img=None, stats_path=None):
+def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=None, stats_path=None):
     doc = SimpleDocTemplate(output_path, pagesize=letter)
     elements = []
     styles = getSampleStyleSheet()
@@ -37,11 +37,6 @@ def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=
     if mean_cbf_img and os.path.exists(mean_cbf_img):
         elements.append(Paragraph("Mean CBF", styles['Heading2']))
         elements.append(Image(mean_cbf_img, width=400, height=157))
-        elements.append(Spacer(1, 12))
-
-    if qt1_img and os.path.exists(qt1_img):
-        elements.append(Paragraph("qT1", styles['Heading2']))
-        elements.append(Image(qt1_img, width=400, height=157))
         elements.append(Spacer(1, 12))
 
     # Add extracted regions section (after qT1, before segmentation)
@@ -63,6 +58,9 @@ def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=
             ('GRID', (0,0), (-1,-1), 1, colors.black),
         ]))
         elements.append(table)
+        elements.append(Spacer(1, 24))
+    else:
+        elements.append(Paragraph("No extracted AD regions data found.", styles['Normal']))
         elements.append(Spacer(1, 24))
 
     # Add segmentation tables, each on a new page
@@ -121,14 +119,12 @@ def main():
 
     pdf_path = os.path.join(outputdir, 'output.pdf')
     mean_cbf_img = os.path.join(viz_path, "meanCBF_mosaic.png")
-    qt1_img = os.path.join(viz_path, "qT1_mosaic.png")
 
     generate_pdf(
         formatted_data,
         segmentation_images,
         pdf_path,
         mean_cbf_img=mean_cbf_img,
-        qt1_img=qt1_img,
         stats_path=stats_path
     )
 

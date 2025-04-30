@@ -161,8 +161,17 @@ fslmaths ${workdir}/sub.nii.gz -abs -Tmean ${workdir}/sub_av.nii.gz
 ### Calculate CBF 
 python3 /flywheel/v0/workflows/cbf_calc.py -m0 ${workdir}/m0_mc.nii.gz -asl ${workdir}/sub_av.nii.gz -m ${workdir}/mask.nii.gz -ld $ld -pld $pld -nbs $nbs -scale $m0_scale -out ${workdir}
 
+# Check what number is in the file name
+vnumber=$(echo "$asl_file" | grep -o -E '_[vV][0-9]+' | grep -o -E '[0-9]+')
+
+# If the version is 22 or lower, we cannot generate T1 and we will skip
+if [ "$vnumber" -gt 22 ]; then
+    echo "Version is greater than 22. Generating quantitative T1."
 # Fit T1 with function z. Skip this step for the recover project bc t1 data is messed up.
-python3 /flywheel/v0/workflows/t1fit.py -m0_ir ${workdir}/m0_ir_mc.nii.gz -m ${workdir}/mask.nii.gz -out ${workdir} -stats ${stats}
+    python3 /flywheel/v0/workflows/t1fit.py -m0_ir ${workdir}/m0_ir_mc.nii.gz -m ${workdir}/mask.nii.gz -out ${workdir} -stats ${stats}
+else
+    echo "Version is 22 or lower. Cannot generate quantitative T1."
+fi
 
 # Smoothing ASL image subject space, deforming images to match template
 fslmaths ${workdir}/sub_av.nii.gz -s 1.5 -mas ${workdir}/mask.nii.gz ${workdir}/s_asl.nii.gz 
@@ -190,57 +199,86 @@ do
   paste ${std}/${str}_label.txt -d ' ' ${stats}/tmp_${str}.txt ${stats}/${str}_vox.txt > ${stats}/cbf_${str}.txt #combine label with values
 done
 
-# We want just general grey and white matter cbf values, so extract these separately
-#${FREESURFER_HOME}/bin/mri_binarize -i ${std}/subcortical.nii.gz -o ${workdir}/grey_matter.nii.gz --match 2 13
-#${FREESURFER_HOME}/bin/mri_binarize -i ${std}/subcortical.nii.gz -o ${workdir}/white_matter.nii.gz --match 1 12
-#fslstats -K ${workdir}/grey_matter.nii.gz ${workdir}/cbf.nii.gz -M -S > ${stats}/tmp_grey.txt
-#fslstats -K ${workdir}/white_matter.nii.gz ${workdir}/cbf.nii.gz -M -S > ${stats}/tmp_white.txt
-
-#new_list=("arterial2" "cortical" "subcortical" "thalamus" "grey" "white") ##list of ROIs
+# Original main processing loop with missing label filter
 for str in "${list[@]}"
 do
   input_cbf="${stats}/cbf_${str}.txt"
   output_cbf="${stats}/formatted_cbf_${str}.txt"
   temp_dir="/flywheel/v0/work/temp_$(date +%s)"
   mkdir -p "$temp_dir"
-  
-  # Create a temporary file with updated header
-  touch $temp_dir/tmp_cbf_${str}.txt
+
+  # Create temporary file with updated header
   temp_file="$temp_dir/tmp_cbf_${str}.txt"
   echo "Region | Mean CBF | Standard Deviation | Voxels | Volume" > "$temp_file"
-  
+
   while IFS= read -r line; do
     [[ -z "$line" ]] && continue  # Skip empty lines
-    
-    # Extract numeric values (now FOUR columns instead of two)
-    mean_cbf=$(echo "$line" | awk '{print $(NF-3)}')   # 3rd from end
-    std_dev=$(echo "$line" | awk '{print $(NF-2)}')    # 2nd from end
-    voxels=$(echo "$line" | awk '{print $(NF-1)}')     # New voxels column
-    volume=$(echo "$line" | awk '{print $NF}')         # New volume column
-    
-    # Extract region name (now excludes last FOUR fields)
+
+    # Extract numeric values
+    mean_cbf=$(echo "$line" | awk '{print $(NF-3)}')
+    std_dev=$(echo "$line" | awk '{print $(NF-2)}')
+    voxels=$(echo "$line" | awk '{print $(NF-1)}')
+    volume=$(echo "$line" | awk '{print $NF}')
+
+    # Extract region name
     region=$(echo "$line" | awk '{
-      for (i=1; i<=NF-4; i++) 
+      for (i=1; i<=NF-4; i++)
         printf "%s ", $i;
-    }' | sed 's/[[:space:]]$//')  # Trim trailing space
-    
-    [[ -z "$region" || "$region" == "0" ]] && continue  # Filter bad entries
-    
-    # Format all numeric values
+    }' | sed 's/[[:space:]]$//')
+
+    # Skip lines with 'missing label' or bad entries
+    [[ -z "$region" || "$region" == "0" || "$region" == *"missing label"* || "$voxels" < "10" ]] && continue
+
+    # Format numeric values
     formatted_mean=$(printf "%.1f" "$mean_cbf")
     formatted_std=$(printf "%.1f" "$std_dev")
-    formatted_voxels=$(printf "%.1f" "$voxels")    # Integer format
-    formatted_volume=$(printf "%.1f" "$volume")    # Integer format
-    
-    # Add all columns to output
+    formatted_voxels=$(printf "%.1f" "$voxels")
+    formatted_volume=$(printf "%.1f" "$volume")
+
     echo "$region | $formatted_mean | $formatted_std | $formatted_voxels | $formatted_volume" >> "$temp_file"
   done < "$input_cbf"
-  
+
   # Format final output
   column -t -s '|' -o '|' "$temp_file" > "$output_cbf"
   rm -rf "$temp_dir"
 done
 
+# Extract these regions to display as a general "AD" check
+target_regions=(
+  "Left_Cerebral_White_Matter"
+  "Right_Cerebral_White_Matter" 
+  "Left_Cerebral_Cortex"
+  "Right_Cerebral_Cortex"
+  "Cingulate_Gyrus,_posterior_division"
+  "Precuneous_Cortex"
+)
+
+extracted_file="${stats}/extracted_regions_combined.txt"
+echo "Region | Mean CBF | Standard Deviation | Voxels | Volume" > "$extracted_file"
+
+# Process only the two specified formatted files
+for type in cortical subcortical; do
+  source_file="${stats}/formatted_cbf_${type}.txt"
+  
+  [[ -f "$source_file" ]] || continue
+  
+  while IFS= read -r line; do
+    # Skip header line and empty lines
+    [[ "$line" == "Region |"* ]] || [[ -z "$line" ]] && continue
+    
+    region=$(echo "$line" | awk -F '|' '{print $1}' | xargs)
+    
+    for target in "${target_regions[@]}"; do
+      if [[ "$region" == "$target" ]]; then
+        echo "$line" >> "$extracted_file"
+      fi
+    done
+  done < "$source_file"
+done
+
+# Format the final extracted file
+column -t -s '|' -o '|' "$extracted_file" > "${extracted_file}.tmp"
+mv "${extracted_file}.tmp" "$extracted_file"
 
 # Smoothing the deformation field of images obtained previously
 fslmaths ${workdir}/ind2temp1Warp.nii.gz -s 5 ${workdir}/swarp.nii.gz
@@ -254,12 +292,21 @@ fslmaths ${workdir}/sub.nii.gz -Tmean ${workdir}/sub_mean.nii.gz
 fslmaths ${workdir}/sub.nii.gz -Tstd ${workdir}/sub_std.nii.gz
 fslmaths ${workdir}/sub_mean.nii.gz -div ${workdir}/sub_std.nii.gz ${workdir}/tSNR_map.nii.gz
 
+# New list of ROIs as we do not want to include the thalamus in the PDF output
+new_list=("arterial2" "cortical" "subcortical") ##list of ROIs
 ### Visualizations
-#python3 -m pip install nilearn
-python3 /flywheel/v0/workflows/viz.py -cbf ${workdir}/cbf.nii.gz -t1 ${workdir}/t1.nii.gz -out ${viz}/ -seg_folder ${workdir}/ -seg ${list[@]}
-
+# Need to take into account whether the version number allowed T1 generation
+if [ "$vnumber" -gt 22 ]; then
+    echo "Version is greater than 22. Generating viz with quantitative T1."
+    python3 /flywheel/v0/workflows/viz.py -cbf ${workdir}/cbf.nii.gz -t1 ${workdir}/t1.nii.gz -out ${viz}/ -seg_folder ${workdir}/ -seg ${new_list[@]}
 ### Create HTML file and output data into it for easy viewing
-python3 /flywheel/v0/workflows/pdf.py -viz ${viz} -stats ${stats}/ -out ${workdir}/ -seg_folder ${workdir}/ -seg ${list[@]}
+    python3 /flywheel/v0/workflows/pdf.py -viz ${viz} -stats ${stats}/ -out ${workdir}/ -seg_folder ${workdir}/ -seg ${new_list[@]}
+else
+    echo "Version is 22 or lower. Cannot generate viz with quantitative T1."
+    python3 /flywheel/v0/workflows/not1_viz.py -cbf ${workdir}/cbf.nii.gz -out ${viz}/ -seg_folder ${workdir}/ -seg ${new_list[@]}
+### Create HTML file and output data into it for easy viewing
+    python3 /flywheel/v0/workflows/not1_pdf.py -viz ${viz} -stats ${stats}/ -out ${workdir}/ -seg_folder ${workdir}/ -seg ${new_list[@]}
+fi
 
 ## Move all files we want easy access to into the output directory
 find ${workdir} -maxdepth 1 \( -name "cbf.nii.gz" -o -name "viz" -o -name "stats" -o -name "t1.nii.gz" -o -name "tSNR_map.nii.gz" -o -name "output.pdf" \) -print0 | xargs -0 -I {} mv {} ${export_dir}/
