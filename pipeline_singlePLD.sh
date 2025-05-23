@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ## script created by Manuel Taso
-## script edited and uploaded to FW by krj
+## script edited, added to and uploaded to FW by krj
 
 ##
 ### Minimal ASL Pre-processing and CBF Calculation
@@ -92,7 +92,7 @@ attempt=1
 max_attempt=2
 
 # Loop until both files are found or max attempts are reached
-while (( attempt <= max_attempts )); do
+while (( attempt <= max_attempt )); do
     echo "Attempt $attempt of $max_attempts..."
 
     # Use find to locate the files
@@ -140,6 +140,11 @@ pld=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\
 nbs=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[11\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 m0_scale=$(iconv -f UTF-8 -t UTF-8//IGNORE "$dcm_file" | awk -F 'sWipMemBlock.alFree\\[20\][[:space:]]*=[[:space:]]*' '{print $2}' | tr -d '[:space:]')
 
+if [[ -z "$ld" || -z "$pld" || -z "$nbs" || -z "$m0_scale" ]]; then
+    echo "Error: One or more required variables are unset or empty."
+    exit 1
+fi
+
 # Merge Data
 fslmerge -t ${workdir}/all_data.nii.gz $m0_file $asl_file
 
@@ -182,7 +187,7 @@ echo "ANTs Registration finished"
 # Standardize CBF images to a common template
 # Removed --use-BSpline flag because we do not want to deform the ROIs
 ${ANTSPATH}/WarpImageMultiTransform 3 ${std}/batsasl/bats_cbf.nii.gz ${workdir}/w_batscbf.nii.gz -R ${workdir}/sub_av.nii.gz -i ${workdir}/ind2temp0GenericAffine.mat ${workdir}/ind2temp1InverseWarp.nii.gz
-list=("arterial2" "cortical" "subcortical" "thalamus") ##list of ROIs
+list=("arterial2" "cortical" "subcortical" "thalamus" "landau") ##list of ROIs
 
 # deforming ROI
 for str in "${list[@]}"
@@ -190,14 +195,16 @@ do
   echo ${str}
   touch ${stats}/tmp_${str}.txt
   touch ${stats}/cbf_${str}.txt
-  touch ${stats}/tmp_${str}_vox.txt
-  ls ${stats}
+  touch ${stats}/${str}_vox.txt
   echo "Printed ${stats}"
   ${ANTSPATH}/WarpImageMultiTransform 3 ${std}/${str}.nii.gz ${workdir}/w_${str}.nii.gz -R ${workdir}/sub_av.nii.gz --use-NN -i ${workdir}/ind2temp0GenericAffine.mat ${workdir}/ind2temp1InverseWarp.nii.gz
   fslstats -K ${workdir}/w_${str}.nii.gz ${workdir}/cbf.nii.gz -M -S > ${stats}/tmp_${str}.txt
   fslstats -K ${workdir}/w_${str}.nii.gz ${workdir}/cbf.nii.gz -V > ${stats}/${str}_vox.txt
   paste ${std}/${str}_label.txt -d ' ' ${stats}/tmp_${str}.txt ${stats}/${str}_vox.txt > ${stats}/cbf_${str}.txt #combine label with values
 done
+
+touch ${stats}/cbf_wholebrain.txt
+fslstats -K ${workdir}/mask.nii.gz ${workdir}/cbf.nii.gz -M > ${stats}/cbf_wholebrain.txt
 
 # Original main processing loop with missing label filter
 for str in "${list[@]}"
@@ -246,18 +253,23 @@ done
 # Extract these regions to display as a general "AD" check
 target_regions=(
   "Left_Cerebral_White_Matter"
-  "Right_Cerebral_White_Matter" 
+  "Right_Cerebral_White_Matter"
   "Left_Cerebral_Cortex"
   "Right_Cerebral_Cortex"
+  "Left_Hippocampus"
+  "Right_Hippocampus"
+  "Left_Putamen"
+  "Right Putamen"
   "Cingulate_Gyrus,_posterior_division"
   "Precuneous_Cortex"
+  "Landau_metaROI"  # Added Landau region
 )
 
 extracted_file="${stats}/extracted_regions_combined.txt"
 echo "Region | Mean CBF | Standard Deviation | Voxels | Volume" > "$extracted_file"
 
-# Process only the two specified formatted files
-for type in cortical subcortical; do
+# Process only the three specified formatted files
+for type in cortical subcortical landau; do
   source_file="${stats}/formatted_cbf_${type}.txt"
   
   [[ -f "$source_file" ]] || continue
@@ -276,9 +288,37 @@ for type in cortical subcortical; do
   done < "$source_file"
 done
 
-# Format the final extracted file
-column -t -s '|' -o '|' "$extracted_file" > "${extracted_file}.tmp"
-mv "${extracted_file}.tmp" "$extracted_file"
+# Calculate reference CBF values
+putamen_left=$(grep "Left_Putamen" "$extracted_file" | awk -F '|' '{print $2}' | xargs)
+putamen_right=$(grep "Right Putamen" "$extracted_file" | awk -F '|' '{print $2}' | xargs)
+putamen_cbf=$(echo "scale=3; ($putamen_left + $putamen_right) / 2" | bc)
+wholebrain_cbf=$(sed -n 's/[^0-9]*\([0-9]\+\).*/\1/p; q' ${stats}/cbf_wholebrain.txt)
+
+# Add ratio columns to extracted file
+temp_file="${stats}/temp_ratio_calc.txt"
+awk -F '|' -v whole_cbf="$wholebrain_cbf" '
+BEGIN {
+    OFS = " | "
+    print "Region | Mean | Std | rCBF | Voxels | Volume"
+}
+{
+    # Skip empty lines
+    if (NF < 5 || $0 ~ /^Region/) next
+    
+    # Convert to numbers (handles any whitespace)
+    mean = $2 + 0
+    std = $3 + 0
+    voxels = $4 + 0
+    volume = $5 + 0
+    
+    # Calculate rCBF putamen ratio
+    rCBF = (mean != 0) ? mean / whole_cbf : "NA"
+    
+    printf "%s | %.1f | %.1f | %.2f | %.0f | %.0f\n",
+        $1, mean, std, rCBF, voxels, volume
+}' "$extracted_file" | column -t -s '|' -o '|' > "$temp_file"
+
+mv "$temp_file" "$extracted_file"
 
 # Smoothing the deformation field of images obtained previously
 fslmaths ${workdir}/ind2temp1Warp.nii.gz -s 5 ${workdir}/swarp.nii.gz
@@ -293,7 +333,7 @@ fslmaths ${workdir}/sub.nii.gz -Tstd ${workdir}/sub_std.nii.gz
 fslmaths ${workdir}/sub_mean.nii.gz -div ${workdir}/sub_std.nii.gz ${workdir}/tSNR_map.nii.gz
 
 # New list of ROIs as we do not want to include the thalamus in the PDF output
-new_list=("arterial2" "cortical" "subcortical") ##list of ROIs
+new_list=("arterial2" "cortical" "subcortical" "landau") ##list of ROIs
 ### Visualizations
 # Need to take into account whether the version number allowed T1 generation
 if [ "$vnumber" -gt 22 ]; then

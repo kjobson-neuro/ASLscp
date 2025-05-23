@@ -12,14 +12,13 @@ def read_formatted_file(file_path):
             data = []
             for line in content[1:]:  # Skip header line
                 parts = line.split('|')
-                if len(parts) < 5:
-                    continue
-                region = parts[0].strip()
-                mean_cbf = parts[1].strip()
-                std_dev = parts[2].strip()
-                vox = parts[3].strip()
-                vol = parts[4].strip()
-                data.append((region, mean_cbf, std_dev, vox, vol))
+                parts = [p.strip() for p in parts]
+                if len(parts) == 6:
+                    region, mean_cbf, std_dev, rcbf, vox, vol = parts
+                    data.append((region, mean_cbf, std_dev, rcbf, vox, vol))
+                elif len(parts) == 5:
+                    region, mean_cbf, std_dev, vox, vol = parts
+                    data.append((region, mean_cbf, std_dev, vox, vol))
             return data
     except FileNotFoundError:
         return []
@@ -39,15 +38,20 @@ def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=
         elements.append(Image(mean_cbf_img, width=400, height=157))
         elements.append(Spacer(1, 12))
 
+    if mean_cbf_img and os.path.exists(mean_cbf_img):
+        elements.append(Paragraph("Mean CBF in B&W", styles['Heading2']))
+        elements.append(Image(mean_cbf_bw_img, width=400, height=157))
+        elements.append(Spacer(1, 12))
+
     # Add extracted regions section (after qT1, before segmentation)
     extracted_path = os.path.join(stats_path, 'extracted_regions_combined.txt')
     extracted_data = read_formatted_file(extracted_path)
     if extracted_data:
-        elements.append(Paragraph("AD Regions CBF Values", styles['Heading2']))
+        elements.append(Paragraph("CBF Values in Alzheimer's Disease Regions of Interest", styles['Heading2']))
         elements.append(Spacer(1, 12))
-        table_data = [["Region", "Mean CBF", "Standard Deviation", "Voxels", "Volume"]]
-        for region, mean_cbf, std_dev, vox, vol in extracted_data:
-            table_data.append([region, mean_cbf, std_dev, vox, vol])
+        table_data = [["Region", "Mean CBF", "Standard Deviation", "rCBF", "Voxels", "Volume"]]
+        for region, mean_cbf, std_dev, rcbf, vox, vol in extracted_data:
+            table_data.append([region, mean_cbf, std_dev, rcbf, vox, vol])
         table = Table(table_data)
         table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
@@ -59,19 +63,19 @@ def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=
         ]))
         elements.append(table)
         elements.append(Spacer(1, 24))
-    else:
-        elements.append(Paragraph("No extracted AD regions data found.", styles['Normal']))
-        elements.append(Spacer(1, 24))
 
     # Add segmentation tables, each on a new page
-    for prefix, data in formatted_data.items():
-        elements.append(PageBreak())
+    for idx, (prefix, data) in enumerate(formatted_data.items()):
+        if idx != 0:
+            elements.append(PageBreak())
         elements.append(Paragraph(f"{prefix.capitalize()} CBF values extracted from segmentations", styles['Heading2']))
         elements.append(Spacer(1, 12))
+
         seg_img_path = segmentation_images.get(prefix, "")
         if seg_img_path and os.path.exists(seg_img_path):
             elements.append(Image(seg_img_path, width=400, height=200))
             elements.append(Spacer(1, 12))
+
         table_data = [["Region", "Mean CBF", "Standard Deviation", "Voxels", "Volume"]]
         for region, mean_cbf, std_dev, vox, vol in data:
             table_data.append([region, mean_cbf, std_dev, vox, vol])
@@ -115,10 +119,11 @@ def main():
             data = read_formatted_file(file_path)
             if data:
                 formatted_data[i] = data
-                segmentation_images[i] = seg_img
+            segmentation_images[i] = seg_img
 
     pdf_path = os.path.join(outputdir, 'output.pdf')
     mean_cbf_img = os.path.join(viz_path, "meanCBF_mosaic.png")
+    mean_cbf_bw_img = os.path.join(viz_path, "meanCBF_bw.png")
 
     generate_pdf(
         formatted_data,

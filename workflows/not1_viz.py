@@ -45,10 +45,14 @@ for i in seg_list:
 
 # Now plot the absolute CBF with discrete scale
 n_colors = 16
-base_cmap = plt.get_cmap('rainbow')
+base_cmap = plt.get_cmap('jet')
 color_list = base_cmap(np.linspace(0, 1, n_colors))
 discrete_cmap = ListedColormap(color_list)
 
 nilearn.plotting.plot_stat_map(mcbf_nii, display_mode='mosaic', bg_img=None, black_bg=True, draw_cross=False, cmap=base_cmap,
-        vmin=0, vmax=100, cut_coords=8, title="meanCBF_mosaic",
+        vmin=0, vmax=100, cut_coords=8, title="meanCBF_mosaic", cbar_tick_format="%i",
         output_file=os.path.join(outputdir, "meanCBF_mosaic.png"))
+
+nilearn.plotting.plot_stat_map(mcbf_nii, display_mode='mosaic', bg_img=None, black_bg=True, draw_cross=False, cmap='gist_yarg_r',
+        vmin=0, vmax=100, cut_coords=8, title="meanCBF_b&w", cbar_tick_format="%i",
+        output_file=os.path.join(outputdir, "meanCBF_bw.png"))
