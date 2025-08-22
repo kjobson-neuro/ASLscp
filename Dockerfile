@@ -96,9 +96,7 @@ RUN curl -fsSL https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/releases/fslinst
     python3 - -d /opt/fsl-6.0.7.1 -V 6.0.7.1 && \
     rm -rf /opt/fsl-6.0.7.1/doc /opt/fsl-6.0.7.1/data
 
-# Install Python packages
-RUN pip3 install numpy && \
-    pip3 install scipy && \
+RUN pip3 install scipy && \
     pip3 install nibabel && \
     pip3 install matplotlib && \
     pip3 install transforms3d && \
@@ -108,6 +106,8 @@ RUN pip3 install numpy && \
     pip3 install nilearn && \
     rm -rf /root/.cache/pip
 
+# Force-reinstall NumPy 1.x only (no deps, so it won’t pull 2.x back in)
+RUN pip3 install --force-reinstall --no-deps "numpy<2.0.0"
 # Copy files and set permissions
 COPY ./input/ ${FLYWHEEL}/input/
 COPY ./workflows/ ${FLYWHEEL}/workflows/

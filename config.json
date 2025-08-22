@@ -1,6 +1,7 @@
 {
     "config": {
-        "generate_t1": true
+        "generate_t1": true,
+        "subject_label": "sub-LOCALTEST" 
     },
     "inputs": {
         "dicom_m0": {
@@ -50,5 +51,6 @@
             }
         }
     },
-    "destination": {}
+    "destination": {},
+    "api_key": ""
 }

@@ -13,9 +13,9 @@ def read_formatted_file(file_path):
             for line in content[1:]:  # Skip header line
                 parts = line.split('|')
                 parts = [p.strip() for p in parts]
-                if len(parts) == 6:
-                    region, mean_cbf, std_dev, rcbf, vox, vol = parts
-                    data.append((region, mean_cbf, std_dev, rcbf, vox, vol))
+                if len(parts) == 4:
+                    region, mean_cbf, rcbf, vox = parts
+                    data.append((region, mean_cbf, rcbf, vox))
                 elif len(parts) == 5:
                     region, mean_cbf, std_dev, vox, vol = parts
                     data.append((region, mean_cbf, std_dev, vox, vol))
@@ -23,7 +23,7 @@ def read_formatted_file(file_path):
     except FileNotFoundError:
         return []
 
-def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=None, qt1_img=None, stats_path=None):
+def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=None, mean_cbf_bw_img=None, qt1_img=None, stats_path=None):
     doc = SimpleDocTemplate(output_path, pagesize=letter)
     elements = []
     styles = getSampleStyleSheet()
@@ -38,25 +38,26 @@ def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=
         elements.append(Image(mean_cbf_img, width=400, height=157))
         elements.append(Spacer(1, 12))
 
-    if mean_cbf_img and os.path.exists(mean_cbf_img):
-        elements.append(Paragraph("Mean CBF in B&W", styles['Heading2']))
+    if mean_cbf_bw_img and os.path.exists(mean_cbf_bw_img):
+        elements.append(Paragraph("Mean CBF", styles['Heading2']))
         elements.append(Image(mean_cbf_bw_img, width=400, height=157))
         elements.append(Spacer(1, 12))
 
     if qt1_img and os.path.exists(qt1_img):
+        elements.append(PageBreak())
         elements.append(Paragraph("qT1", styles['Heading2']))
         elements.append(Image(qt1_img, width=400, height=157))
-        elements.append(Spacer(1, 12))
+        elements.append(Spacer(1, 24))
 
     # Add extracted regions section (after qT1, before segmentation)
-    extracted_path = os.path.join(stats_path, 'extracted_regions_combined.txt')
-    extracted_data = read_formatted_file(extracted_path)
-    if extracted_data:
-        elements.append(Paragraph("CBF Values in Alzheimer's Disease Regions of Interest", styles['Heading2']))
+    weighted_path = os.path.join(stats_path, 'weighted_table.txt')
+    weighted_data = read_formatted_file(weighted_path)
+    if weighted_data:
+        elements.append(Paragraph("CBF and rCBF values for AD Regions", styles['Heading2']))
         elements.append(Spacer(1, 12))
-        table_data = [["Region", "Mean CBF", "Standard Deviation", "rCBF", "Voxels", "Volume"]]
-        for region, mean_cbf, std_dev, rcbf, vox, vol in extracted_data:
-            table_data.append([region, mean_cbf, std_dev, rcbf, vox, vol])
+        table_data = [["Region", "Mean CBF (mL/100g/min)", "rCBF", "Voxels (count)"]]
+        for region, mean, rcbf, voxels in weighted_data:
+            table_data.append([region, mean, rcbf, voxels])
         table = Table(table_data)
         table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
@@ -67,7 +68,7 @@ def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=
             ('GRID', (0,0), (-1,-1), 1, colors.black),
         ]))
         elements.append(table)
-        elements.append(Spacer(1, 24))
+        elements.append(Spacer(1, 36))
 
     # Add segmentation tables, each on a new page
     for idx, (prefix, data) in enumerate(formatted_data.items()):
@@ -81,7 +82,7 @@ def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=
             elements.append(Image(seg_img_path, width=400, height=200))
             elements.append(Spacer(1, 12))
 
-        table_data = [["Region", "Mean CBF", "Standard Deviation", "Voxels", "Volume"]]
+        table_data = [["Region", "Mean CBF (mL/100g/min)", "Standard Deviation", "Voxels (count)", "Volume (mm^3)"]]
         for region, mean_cbf, std_dev, vox, vol in data:
             table_data.append([region, mean_cbf, std_dev, vox, vol])
         table = Table(table_data)
@@ -136,6 +137,7 @@ def main():
         segmentation_images,
         pdf_path,
         mean_cbf_img=mean_cbf_img,
+        mean_cbf_bw_img=mean_cbf_bw_img,
         qt1_img=qt1_img,
         stats_path=stats_path
     )
