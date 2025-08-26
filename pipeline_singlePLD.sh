@@ -79,7 +79,71 @@ asl_dcmdir="${workdir}/asl_dcmdir"
 stats="${export_dir}/stats"
 [ -e "$stats" ] || mkdir "$stats"
 
-echo "$SUBJECT_LABEL"
+### Get information about the scan
+INFO_OUT=${workdir}/metadata.txt
+
+# --- Pull container IDs from the gear runtime config ---
+SUB_ID=$(jq -r '.inputs|to_entries[]?|.value.hierarchy|select(.type=="subject")|.id' "$ConfigJsonFile" | head -n1)
+SES_ID=$(jq -r '.inputs|to_entries[]?|.value.hierarchy|select(.type=="session")|.id' "$ConfigJsonFile" | head -n1)
+ACQ_ID=$(jq -r '.inputs|to_entries[]?|.value.hierarchy|select(.type=="acquisition")|.id' "$ConfigJsonFile" | head -n1)
+
+# --- Gear identity/version and run time ---
+GEAR_NAME=$(jq -r '.gear.name // empty' "$ConfigJsonFile")
+GEAR_VERSION=$(jq -r '.gear.version // empty' "$ConfigJsonFile")
+if [[ -z "$GEAR_VERSION" && -f "$MAN" ]]; then
+  GEAR_VERSION=$(jq -r '.version // empty' "$MAN" || true)
+fi
+RUN_TIME_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+# --- Resolve labels & scan date with fwget (no direct API) ---
+SUB_LABEL=""; SES_LABEL=""; ACQ_LABEL=""; SCAN_DATE=""
+if command -v fwget >/dev/null 2>&1; then
+  if [[ -n "${SUB_ID:-}" ]]; then
+    SUB_JSON=$(mktemp)
+    fwget -l "$SUB_ID" > "$SUB_JSON" || true
+    SUB_LABEL=$(jq -r '.label // .code // empty' "$SUB_JSON" || true)
+  fi
+
+  if [[ -n "${SES_ID:-}" ]]; then
+    SES_JSON=$(mktemp)
+    fwget -l "$SES_ID" > "$SES_JSON" || true
+    SES_LABEL=$(jq -r '.label // empty' "$SES_JSON" || true)
+    # Session timestamp is generally the exam/scan datetime
+    SCAN_DATE=$(jq -r '.timestamp // empty' "$SES_JSON" || true)
+  fi
+
+  if [[ -z "$SCAN_DATE" && -n "${ACQ_ID:-}" ]]; then
+    ACQ_JSON=$(mktemp)
+    fwget -l "$ACQ_ID" > "$ACQ_JSON" || true
+    ACQ_LABEL=$(jq -r '.label // empty' "$ACQ_JSON" || true)
+    SCAN_DATE=$(jq -r '.timestamp // empty' "$ACQ_JSON" || true)
+  fi
+fi
+
+# --- Write provenance file ---
+{
+  echo "=== Gear provenance ==="
+  echo "Gear: ${GEAR_NAME:-unknown}"
+  echo "Gear Version: ${GEAR_VERSION:-unknown}"
+  echo "Gear Run (UTC): $RUN_TIME_UTC"
+  echo "=== Subject / Session / Acquisition ==="
+  echo "Subject: ${SUB_LABEL:-}(id=${SUB_ID:-unknown})"
+  [[ -n "${SES_ID:-}" ]] && echo "Session: ${SES_LABEL:-}(id=${SES_ID:-})"
+  [[ -n "${ACQ_ID:-}" ]] && echo "Acquisition: ${ACQ_LABEL:-}(id=${ACQ_ID:-})"
+  echo "Scan Date: ${SCAN_DATE:-unknown}"
+  echo
+} > "$INFO_OUT"
+
+# Optional: append full fwget dumps (handy for debugging/audit)
+if command -v fwget >/dev/null 2>&1; then
+  {
+    [[ -n "${SUB_ID:-}" ]] && { echo "=== fwget -l ${SUB_ID} ==="; fwget -l "$SUB_ID" || true; echo; }
+    [[ -n "${SES_ID:-}" ]] && { echo "=== fwget -l ${SES_ID} ==="; fwget -l "$SES_ID" || true; echo; }
+    [[ -n "${ACQ_ID:-}" ]] && { echo "=== fwget -l ${ACQ_ID} ==="; fwget -l "$ACQ_ID" || true; echo; }
+  } >> "$INFO_OUT"
+fi
+
+echo "Wrote $INFO_OUT"
 
 ### Data Preprocessing
 # Check if the data is a zip file
@@ -302,7 +366,7 @@ target_regions=(
   "Right_Putamen"
   "Cingulate_Gyrus,_posterior_division"
   "Precuneous_Cortex"
-  "Landau_metaROI"  # Added Landau region
+ # "Landau_metaROI"  # Added Landau region
 )
 
 extracted_file="${stats}/extracted_regions_combined.txt"
@@ -470,19 +534,25 @@ fslmaths ${workdir}/sub.nii.gz -Tstd ${workdir}/sub_std.nii.gz
 fslmaths ${workdir}/sub_mean.nii.gz -div ${workdir}/sub_std.nii.gz ${workdir}/tSNR_map.nii.gz
 
 # New list of ROIs as we do not want to include the thalamus in the PDF output
-new_list=("arterial2" "cortical" "subcortical" "landau") ##list of ROIs
+new_list=("arterial2" "cortical" "subcortical") ##list of ROIs - "landau" removed
 
+# Smoothing for viz
+## Upsampling to 1mm and then smoothing to 2 voxels for nicer viz
+flirt -in ${workdir}/cbf.nii.gz -ref ${workdir}/cbf.nii.gz -applyisoxfm 1.0 -nosearch -out ${workdir}/cbf_1mm.nii.gz -interp spline
+flirt -in ${workdir}/mask.nii.gz -ref ${workdir}/mask.nii.gz -applyisoxfm 1.0 -nosearch -out ${workdir}/mask_1mm.nii.gz
+fslmaths ${workdir}/cbf_1mm.nii.gz -s 2 ${workdir}/s_cbf_1mm.nii.gz
+ 
 ### Visualizations
 # Check if vnumber is numeric, default to 0 or exit if not
 if [ "$qt1_capable" = true ]; then
     echo "Version is greater than 22. Generating viz with quantitative T1."
     ${ANTSPATH}/WarpImageMultiTransform 3 ${workdir}/t1.nii.gz ${workdir}/wt1.nii.gz -R ${workdir}/ind2temp_warped.nii.gz --use-BSpline ${workdir}/swarp.nii.gz ${workdir}/ind2temp0GenericAffine.mat
-    python3 /flywheel/v0/workflows/viz.py -cbf ${workdir}/cbf.nii.gz -t1 ${workdir}/t1.nii.gz -out ${viz}/ -seg_folder ${workdir}/ -seg ${new_list[@]} -mask ${workdir}/mask.nii.gz
+    python3 /flywheel/v0/workflows/viz.py -cbf ${workdir}/s_cbf_1mm.nii.gz -t1 ${workdir}/t1.nii.gz -out ${viz}/ -seg_folder ${workdir}/ -seg ${new_list[@]} -mask ${workdir}/mask_1mm.nii.gz
 ### Create HTML file and output data into it for easy viewing
     python3 /flywheel/v0/workflows/pdf.py -viz ${viz} -stats ${stats}/ -out ${workdir}/ -seg_folder ${workdir}/ -seg ${new_list[@]}
 else
     echo "Version is 22 or lower. Cannot generate viz with quantitative T1."
-    python3 /flywheel/v0/workflows/not1_viz.py -cbf ${workdir}/cbf.nii.gz -out ${viz}/ -seg_folder ${workdir}/ -seg ${new_list[@]} -mask ${workdir}/mask.nii.gz
+    python3 /flywheel/v0/workflows/not1_viz.py -cbf ${workdir}/s_cbf_1mm.nii.gz -out ${viz}/ -seg_folder ${workdir}/ -seg ${new_list[@]} -mask ${workdir}/mask_1mm.nii.gz
 ### Create HTML file and output data into it for easy viewing
     python3 /flywheel/v0/workflows/not1_pdf.py -viz ${viz} -stats ${stats}/ -out ${workdir}/ -seg_folder ${workdir}/ -seg ${new_list[@]}
 fi
@@ -495,5 +565,5 @@ mv ${export_dir}/stats/tmp* ${workdir}/
 
 ## Zip the output directory for easy download
 ## Also zip work dir so people can look at the intermediate data to troubleshoot
-zip -r ${export_dir}/output.zip ${export_dir}
-zip -r ${export_dir}/work_dir.zip ${workdir}
+zip -q -r ${export_dir}/final_output.zip ${export_dir}
+zip -q -r ${export_dir}/work_dir.zip ${workdir}

@@ -3,7 +3,7 @@ import argparse
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Image, Paragraph, Spacer, PageBreak
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 def read_formatted_file(file_path):
     try:
@@ -28,11 +28,55 @@ def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=
     elements = []
     styles = getSampleStyleSheet()
 
-    # Add main title
-    elements.append(Paragraph("ASL self-contained processing pipeline output", styles['Title']))
+    
+
+    # Style: wrapped title for long strings
+    title_style = ParagraphStyle('TitleWrap', parent=styles['Title'], wordWrap='CJK')
+    # Style: table header with wrapping
+    header_style = ParagraphStyle('TableHeaderWrap', parent=styles['BodyText'], fontName='Helvetica-Bold', alignment=1, wordWrap='CJK')
+# Add main title
+    elements.append(Paragraph("ASL self-contained processing pipeline output", title_style))
     elements.append(Spacer(1, 24))
 
-    # Add mean_CBF and qT1 images if provided
+    
+    # === Injected block: metadata under the title ===
+    # Tries to read "metadata.txt" from the same directory as the output PDF.
+    # Each line should be in "Key: Value" format.
+    try:
+        meta_file = os.path.join(os.path.dirname(output_path), "metadata.txt")
+        if os.path.exists(meta_file):
+            with open(meta_file, "r") as _mf:
+                _lines = [ln.strip() for ln in _mf.read().strip().splitlines() if ln.strip()]
+            _rows = []
+            for _ln in _lines:
+                if ":" in _ln:
+                    _k, _v = _ln.split(":", 1)
+                else:
+                    _k, _v = _ln, ""
+                # Bold the key (name), include a colon between key and value
+                _para = Paragraph(f"<b>{_k.strip()}</b>: {_v.strip()}", styles["BodyText"])
+                _rows.append([_para])
+            # Single-column bordered panel
+            _table = Table(_rows, hAlign="LEFT")
+            _table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (0,-1), 'LEFT'),
+            ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
+                ("FONTSIZE", (0,0), (-1,-1), 10),
+                ("LEADING", (0,0), (-1,-1), 12),
+                ("LEFTPADDING", (0,0), (-1,-1), 8),
+                ("RIGHTPADDING", (0,0), (-1,-1), 8),
+                ("TOPPADDING", (0,0), (-1,-1), 6),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+                ("BOX", (0,0), (-1,-1), 0.75, colors.grey),
+                ("BACKGROUND", (0,0), (-1,-1), colors.whitesmoke),
+            ]))
+            elements.append(_table)
+            elements.append(Spacer(1, 18))
+    except Exception as _e:
+        # Fail silently to preserve original behavior
+        pass
+    # === End injected block ===
+# Add mean_CBF and qT1 images if provided
     if mean_cbf_img and os.path.exists(mean_cbf_img):
         elements.append(Paragraph("Mean CBF", styles['Heading2']))
         elements.append(Image(mean_cbf_img, width=400, height=157))
@@ -44,22 +88,30 @@ def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=
         elements.append(Spacer(1, 12))
 
     if qt1_img and os.path.exists(qt1_img):
-        elements.append(PageBreak())
-        elements.append(Paragraph("qT1", styles['Heading2']))
+        elements.append(Paragraph("qT1 mosaic", styles['Heading2']))
         elements.append(Image(qt1_img, width=400, height=157))
         elements.append(Spacer(1, 24))
+
 
     # Add extracted regions section (after qT1, before segmentation)
     weighted_path = os.path.join(stats_path, 'weighted_table.txt')
     weighted_data = read_formatted_file(weighted_path)
     if weighted_data:
+        elements.append(PageBreak())
         elements.append(Paragraph("CBF and rCBF values for AD Regions", styles['Heading2']))
         elements.append(Spacer(1, 12))
-        table_data = [["Region", "Mean CBF (mL/100g/min)", "rCBF", "Voxels (count)"]]
+        # Build a compact, wrapped table that fits the page better
+        table_data = [[
+            Paragraph('Region', header_style),
+            Paragraph('Mean CBF (mL/100g/min)', header_style),
+            Paragraph('rCBF', header_style),
+            Paragraph('Voxels (count)', header_style)
+        ]]
         for region, mean, rcbf, voxels in weighted_data:
-            table_data.append([region, mean, rcbf, voxels])
-        table = Table(table_data)
+            table_data.append([Paragraph(str(region), styles['BodyText']), mean, rcbf, voxels])
+        table = Table(table_data, repeatRows=1)
         table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (0,-1), 'LEFT'),
             ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
             ('TEXTCOLOR', (0,0), (-1,0), colors.black),
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -68,6 +120,7 @@ def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=
             ('GRID', (0,0), (-1,-1), 1, colors.black),
         ]))
         elements.append(table)
+    
         elements.append(Spacer(1, 36))
 
     # Add segmentation tables, each on a new page
@@ -82,19 +135,33 @@ def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=
             elements.append(Image(seg_img_path, width=400, height=200))
             elements.append(Spacer(1, 12))
 
-        table_data = [["Region", "Mean CBF (mL/100g/min)", "Standard Deviation", "Voxels (count)", "Volume (mm^3)"]]
+        table_data = [[
+            Paragraph('Region', header_style),
+            Paragraph('Mean CBF (mL/100g/min)', header_style),
+            Paragraph('Standard Deviation', header_style),
+            Paragraph('Voxels (count)', header_style),
+            Paragraph('Volume (mm^3)', header_style)
+        ]]
         for region, mean_cbf, std_dev, vox, vol in data:
-            table_data.append([region, mean_cbf, std_dev, vox, vol])
-        table = Table(table_data)
+            table_data.append([Paragraph(str(region), styles['BodyText']), mean_cbf, std_dev, vox, vol])
+
+        _w = doc.width if hasattr(doc, "width") else 468
+        _c0 = int(_w * 0.38)
+        _c1 = int(_w * 0.19)
+        _c2 = int(_w * 0.19)
+        _c3 = int(_w * 0.12)
+        _c4 = _w - (_c0 + _c1 + _c2 + _c3)
+        table = Table(table_data, colWidths=[_c0, _c1, _c2, _c3, _c4], repeatRows=1)
         table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
             ('TEXTCOLOR', (0,0), (-1,0), colors.black),
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0,0), (-1,0), 12),
+            ('BOTTOMPADDING', (0,0), (-1,0), 8),
             ('GRID', (0,0), (-1,-1), 1, colors.black),
         ]))
         elements.append(table)
+
         elements.append(Spacer(1, 24))
 
     doc.build(elements)
