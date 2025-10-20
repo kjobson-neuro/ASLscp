@@ -1,17 +1,14 @@
 {
-    "config": {
-        "generate_t1": true,
-        "subject_label": "sub-LOCALTEST" 
-    },
+    "config": {},
     "inputs": {
-        "dicom_m0": {
+        "dicom_asl": {
             "base": "file",
             "location": {
-                "name": "SPIRAL_V24_GE_M0.zip",
-                "path": "/flywheel/v0/input/dicom_m0/SPIRAL_V24_GE_M0.zip"
+                "name": "SPIRAL_V24_GE_ASL.zip",
+                "path": "/flywheel/v0/input/dicom_asl/SPIRAL_V24_GE_ASL.zip"
             },
             "object": {
-                "size": 2865860,
+                "size": 2952986,
                 "type": null,
                 "mimetype": "application/octet-stream",
                 "modality": null,
@@ -27,14 +24,14 @@
                 }
             }
         },
-        "dicom_asl": {
+        "dicom_m0": {
             "base": "file",
             "location": {
-                "name": "SPIRAL_V24_GE_ASL.zip",
-                "path": "/flywheel/v0/input/dicom_asl/SPIRAL_V24_GE_ASL.zip"
+                "name": "SPIRAL_V24_GE_M0.zip",
+                "path": "/flywheel/v0/input/dicom_m0/SPIRAL_V24_GE_M0.zip"
             },
             "object": {
-                "size": 518103,
+                "size": 778032,
                 "type": null,
                 "mimetype": "application/octet-stream",
                 "modality": null,
@@ -51,6 +48,5 @@
             }
         }
     },
-    "destination": {},
-    "api_key": ""
+    "destination": {}
 }

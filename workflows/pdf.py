@@ -75,6 +75,7 @@ def generate_pdf(formatted_data, segmentation_images, output_path, mean_cbf_img=
     except Exception as _e:
         # Fail silently to preserve original behavior
         pass
+
     # === End injected block ===
 # Add mean_CBF and qT1 images if provided
     if mean_cbf_img and os.path.exists(mean_cbf_img):

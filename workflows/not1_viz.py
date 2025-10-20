@@ -6,7 +6,7 @@ import nibabel as nb
 import shutil
 from nibabel.processing import smooth_image
 import nilearn
-import nilearn.plotting 
+import nilearn.plotting
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import numpy as np
@@ -43,11 +43,12 @@ mask_bool = mask_data > 0     # True inside mask, False outside
 
 # ---- Apply the mask ----
 # voxels outside the mask get `fill_value`
+fill_value = 0.0
 masked_data = np.where(mask_bool, img_data, fill_value).astype(img_data.dtype)
 
 # ---- Re‑create a NIfTI object ----
 # Use the *image*’s affine so you preserve its spatial orientation
-masked_img = nib.Nifti1Image(masked_data, affine=img.affine, header=img.header)
+masked_img = nb.Nifti1Image(masked_data, affine=mcbf_nii.affine, header=mcbf_nii.header)
 
 # Take the list of segmentations and loop through for vizualizations
 seg_folder = args.seg_folder
@@ -79,5 +80,4 @@ nilearn.plotting.plot_stat_map(masked_img, display_mode='mosaic', bg_img=None, b
 nilearn.plotting.plot_stat_map(masked_img, display_mode='mosaic', bg_img=None, black_bg=True, draw_cross=False, cmap='gist_yarg_r',
         vmin=0, vmax=100, cut_coords=8, title="meanCBF_bw", cbar_tick_format="%i",
         output_file=os.path.join(outputdir, "meanCBF_bw.png"))
-
 
