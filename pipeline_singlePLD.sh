@@ -289,6 +289,7 @@ else
     # Warping atlases, deforming ROI
     # Standardize CBF images to a common template
     # Removed --use-BSpline flag because we do not want to deform the ROIs
+    # Schaefer 2018 atlas is the 100 parcels 17 networks version
     ${ANTSPATH}/WarpImageMultiTransform 3 ${std}/batsasl/bats_cbf.nii.gz ${workdir}/w_batscbf.nii.gz -R ${workdir}/sub_av.nii.gz -i ${workdir}/ind2temp0GenericAffine.mat ${workdir}/ind2temp1InverseWarp.nii.gz
     list=("arterial2" "cortical" "subcortical" "thalamus" "landau" "schaefer2018") ##list of ROIs
 
@@ -521,7 +522,7 @@ else
     fslmaths ${workdir}/sub_mean.nii.gz -div ${workdir}/sub_std.nii.gz ${workdir}/tSNR_map.nii.gz
 
     # New list of ROIs as we do not want to include the thalamus in the PDF output
-    new_list=("arterial2" "cortical" "subcortical") ##list of ROIs - "landau" removed
+    new_list=("arterial2" "cortical" "subcortical" "schaefer2018") ##list of ROIs - "landau" removed
 
     # Smoothing for viz
     ## Upsampling to 1mm and then smoothing to 2 voxels for nicer viz

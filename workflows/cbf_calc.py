@@ -19,13 +19,13 @@ parser.add_argument('-out',type=str, help='The output directory.')
 args = parser.parse_args()
 
 nameref = args.m0
-ref_data = nib.load(nameref).get_fdata().astype(np.float16)
+ref_data = nib.load(nameref).get_fdata().astype(np.float64)
 
 nameasl = args.asl
-asl_data = nib.load(nameasl).get_fdata().astype(np.int16)
+asl_data = nib.load(nameasl).get_fdata().astype(np.float64)
 
 namemask = args.m
-mask_data = nib.load(namemask).get_fdata().astype(np.int16)
+mask_data = nib.load(namemask).get_fdata().astype(np.float64)
 ####
 
 m0 = ref_data * args.scale
@@ -41,7 +41,7 @@ cbf[np.isinf(cbf) | np.isnan(cbf)] = 0
 
 cbf = cbf * mask_data
 
-modified_img = nib.Nifti1Image(cbf, nib.load(nameasl).affine, nib.load(nameasl).header)
+modified_img = nib.Nifti1Image(cbf, nib.load(namemask).affine, nib.load(namemask).header)
 
 out_dir = args.out
 print(out_dir)
